@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { MOCK_USER_PROFILE } from '@/lib/constants';
 
 const Navbar: React.FC = () => {
   return (
