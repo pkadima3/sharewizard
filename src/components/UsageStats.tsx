@@ -12,11 +12,14 @@ import {
   Facebook,
   Share,
   Calendar,
-  CircleDollarSign
+  CircleDollarSign,
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculateUsagePercentage, formatPlanName, getDaysRemainingInPlan, getSuggestedUpgrade } from '@/lib/subscriptionUtils';
 import { Button } from '@/components/ui/button';
+import { createSubscriptionCheckout, createFlexCheckout, openCustomerPortal } from '@/lib/stripe';
+import { useToast } from '@/hooks/use-toast';
 
 interface UsageStatsProps {
   stats: UserStats;
@@ -24,7 +27,8 @@ interface UsageStatsProps {
 }
 
 const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
-  const { userProfile, subscription } = useAuth();
+  const { userProfile, subscription, currentUser } = useAuth();
+  const { toast } = useToast();
   
   // Calculate usage percentages
   const aiUsagePercentage = Math.min(
@@ -46,6 +50,77 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
   
   // Suggested upgrade message
   const upgradeMessage = getSuggestedUpgrade(planType);
+
+  // Handle plan upgrade
+  const handleUpgrade = async () => {
+    if (!currentUser) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to upgrade your plan",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      let priceId = "";
+
+      // Determine which price ID to use based on current plan
+      switch (planType) {
+        case 'free':
+        case 'trial':
+          // Start with basic plan
+          priceId = "price_basic_monthly"; // Replace with your actual price ID
+          break;
+        case 'basic':
+          // Upgrade to premium
+          priceId = "price_premium_monthly"; // Replace with your actual price ID
+          break;
+        case 'premium':
+        case 'flexy':
+          // Buy flex pack
+          priceId = "price_flex_pack"; // Replace with your actual price ID
+          const quantity = 1;
+          const url = await createFlexCheckout(currentUser.uid, priceId, quantity);
+          window.location.assign(url);
+          return;
+      }
+
+      const url = await createSubscriptionCheckout(currentUser.uid, priceId);
+      window.location.assign(url);
+    } catch (error: any) {
+      console.error("Error upgrading plan:", error);
+      toast({
+        title: "Error",
+        description: `Failed to upgrade plan: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle opening customer portal
+  const handleOpenPortal = async () => {
+    if (!currentUser) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to manage your subscription",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const url = await openCustomerPortal(currentUser.uid);
+      window.location.assign(url);
+    } catch (error: any) {
+      console.error("Error opening customer portal:", error);
+      toast({
+        title: "Error",
+        description: `Failed to open customer portal: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
   
   return (
     <div className="space-y-6 animate-fade-in">
@@ -96,13 +171,29 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
           {/* Upgrade Prompt */}
           <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
             <p className="text-sm text-gray-700 mb-3">{upgradeMessage}</p>
-            <Button 
-              variant="default" 
-              size="sm" 
-              className="w-full sm:w-auto"
-            >
-              Upgrade Plan
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="w-full sm:w-auto"
+                onClick={handleUpgrade}
+              >
+                Upgrade Plan
+              </Button>
+              
+              {/* Only show manage subscription button for paid users */}
+              {(planType === 'basic' || planType === 'premium' || planType === 'trial') && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full sm:w-auto"
+                  onClick={handleOpenPortal}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Manage Subscription
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         
