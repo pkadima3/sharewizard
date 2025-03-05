@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { LogOut, Menu, X, Star } from 'lucide-react';
+import { LogOut, Menu, X } from 'lucide-react';
 import { ThemeSwitcher } from './ThemeToggle';
 
 const Navbar: React.FC = () => {

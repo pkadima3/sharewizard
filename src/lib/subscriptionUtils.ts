@@ -1,3 +1,4 @@
+
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { DEFAULT_REQUEST_LIMIT } from './constants';
@@ -205,5 +206,131 @@ export const addFlexRequests = async (userId: string, additionalRequests: number
   } catch (error) {
     console.error("Error adding flex requests:", error);
     return false;
+  }
+};
+
+// New functions to support the pricing page
+
+export const activateTrial = async (userId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      return false;
+    }
+    
+    const userData = userDoc.data();
+    
+    // Only allow activation if user is on free plan
+    if (userData.plan_type !== 'free') {
+      return false;
+    }
+    
+    const trialEndDate = new Date();
+    trialEndDate.setDate(trialEndDate.getDate() + 5); // 5-day trial
+    
+    await updateDoc(userRef, {
+      plan_type: 'trial',
+      requests_limit: DEFAULT_REQUEST_LIMIT.trial,
+      trial_end_date: trialEndDate,
+      requests_used: 0 // Reset usage counter for trial
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error activating trial:", error);
+    return false;
+  }
+};
+
+export const isPlanEligibleForTrial = async (userId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      return false;
+    }
+    
+    const userData = userDoc.data();
+    
+    // Only allow trial if user is on free plan and hasn't used trial before
+    return userData.plan_type === 'free' && !userData.has_used_trial;
+  } catch (error) {
+    console.error("Error checking trial eligibility:", error);
+    return false;
+  }
+};
+
+export const getPlanFeatures = (planType: string): string[] => {
+  const baseFeatures = [
+    '5 free requests during trial',
+  ];
+  
+  switch (planType) {
+    case 'basic':
+      return [
+        ...baseFeatures,
+        '75 requests/month',
+        'Single platform support',
+        'Post ideas and captions (image only support)',
+        'Basic analytics'
+      ];
+    case 'premium':
+      return [
+        ...baseFeatures,
+        '250 requests/month',
+        'Multi-platform support',
+        'Advanced Post ideas and captions',
+        'Multi-media support (image/video)',
+        'Priority support',
+        'Advanced analytics',
+        'Custom templates'
+      ];
+    case 'flexy':
+      return [
+        'No monthly commitment',
+        'Works with Basic or Premium plan',
+        'Same features as your base plan',
+        'Usage analytics included',
+        '20 additional requests per pack'
+      ];
+    default:
+      return baseFeatures;
+  }
+};
+
+export const getPlanBilling = (planType: string, cycle: 'monthly' | 'yearly'): { price: string, saving?: string } => {
+  switch (planType) {
+    case 'basic':
+      return cycle === 'monthly' 
+        ? { price: '£9.99/month' }
+        : { price: '£59.99/year', saving: 'Save £59.89/year (~50%)' };
+    case 'premium':
+      return cycle === 'monthly'
+        ? { price: '£59.99/month' }
+        : { price: '£199.99/year', saving: 'Save £519.89/year (~43%)' };
+    case 'flexy':
+      return { price: '£1.99 per pack' };
+    default:
+      return { price: 'Free' };
+  }
+};
+
+export const getStripePriceId = (planType: string, cycle: 'monthly' | 'yearly'): string => {
+  switch (planType) {
+    case 'basic':
+      return cycle === 'monthly' 
+        ? 'price_1QzLExGCd9fidigrcqSSEhSM'
+        : 'price_1QzLIQGCd9fidigre35Wc90Y';
+    case 'premium':
+      return cycle === 'monthly'
+        ? 'price_1QzL3bGCd9fidigrpAXemWMN'
+        : 'price_1QzL6ZGCd9fidigrckYnMw6w';
+    case 'flexy':
+      return 'price_1QzLOMGCd9fidigrt9Bk0C67';
+    default:
+      return '';
   }
 };
