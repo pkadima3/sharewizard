@@ -6,6 +6,7 @@ import NicheSelector from '@/components/NicheSelector';
 import PlatformSelector from '@/components/PlatformSelector';
 import GoalSelector from '@/components/GoalSelector';
 import ToneSelector from '@/components/ToneSelector';
+import GeneratedCaptions from '@/components/GeneratedCaptions';
 import { toast } from "sonner";
 
 const CaptionGenerator: React.FC = () => {
@@ -17,6 +18,7 @@ const CaptionGenerator: React.FC = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const [selectedGoal, setSelectedGoal] = useState<string>('');
   const [selectedTone, setSelectedTone] = useState<string>('');
+  const [generatedCaptions, setGeneratedCaptions] = useState<boolean>(false);
 
   // Clean up URL objects when component unmounts or when URL changes
   useEffect(() => {
@@ -58,7 +60,7 @@ const CaptionGenerator: React.FC = () => {
     {
       title: "Generated Captions",
       description: "View and edit your captions",
-      isCompleted: false
+      isCompleted: generatedCaptions
     }
   ];
 
@@ -104,6 +106,7 @@ const CaptionGenerator: React.FC = () => {
     setTimeout(() => {
       setIsGenerating(false);
       setCurrentStep(prev => prev + 1);
+      setGeneratedCaptions(true);
       toast.success("Captions generated successfully!");
     }, 2000);
   };
@@ -171,7 +174,7 @@ const CaptionGenerator: React.FC = () => {
               (currentStep === 4 && !selectedTone)
             }
             isGenerating={isGenerating}
-            hideNextButton={currentStep === 4}
+            hideNextButton={currentStep === 4 || currentStep === 5}
           >
             {currentStep === 0 && (
               <MediaUploader 
@@ -212,14 +215,14 @@ const CaptionGenerator: React.FC = () => {
             )}
             
             {currentStep === 5 && (
-              <div className="flex items-center justify-center h-full p-6">
-                <div className="text-center">
-                  <h3 className="text-lg font-medium">Generated Captions</h3>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    This step will be implemented in the next phase.
-                  </p>
-                </div>
-              </div>
+              <GeneratedCaptions
+                mediaFile={selectedMedia}
+                previewUrl={previewUrl}
+                selectedNiche={selectedNiche}
+                selectedPlatform={selectedPlatform}
+                selectedGoal={selectedGoal}
+                selectedTone={selectedTone}
+              />
             )}
           </WizardLayout>
         </div>
