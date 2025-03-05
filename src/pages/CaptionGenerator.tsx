@@ -4,6 +4,7 @@ import { WizardLayout, WizardStep } from '@/components/WizardLayout';
 import MediaUploader from '@/components/MediaUploader';
 import NicheSelector from '@/components/NicheSelector';
 import PlatformSelector from '@/components/PlatformSelector';
+import GoalSelector from '@/components/GoalSelector';
 import { toast } from "sonner";
 
 const CaptionGenerator: React.FC = () => {
@@ -13,6 +14,7 @@ const CaptionGenerator: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedNiche, setSelectedNiche] = useState<string>('');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  const [selectedGoal, setSelectedGoal] = useState<string>('');
 
   // Clean up URL objects when component unmounts or when URL changes
   useEffect(() => {
@@ -44,7 +46,7 @@ const CaptionGenerator: React.FC = () => {
     {
       title: "Goal",
       description: "Define your content goal",
-      isCompleted: false
+      isCompleted: !!selectedGoal
     },
     {
       title: "Tone",
@@ -85,6 +87,10 @@ const CaptionGenerator: React.FC = () => {
     setSelectedPlatform(platform);
   };
 
+  const handleGoalChange = (goal: string) => {
+    setSelectedGoal(goal);
+  };
+
   const handleNext = () => {
     if (currentStep === 0 && !selectedMedia) {
       toast.error("Please upload a media file to continue");
@@ -98,6 +104,11 @@ const CaptionGenerator: React.FC = () => {
     
     if (currentStep === 2 && !selectedPlatform) {
       toast.error("Please select a platform to continue");
+      return;
+    }
+    
+    if (currentStep === 3 && !selectedGoal) {
+      toast.error("Please select a content goal to continue");
       return;
     }
     
@@ -133,7 +144,8 @@ const CaptionGenerator: React.FC = () => {
             isNextDisabled={
               (currentStep === 0 && !selectedMedia) || 
               (currentStep === 1 && !selectedNiche) ||
-              (currentStep === 2 && !selectedPlatform)
+              (currentStep === 2 && !selectedPlatform) ||
+              (currentStep === 3 && !selectedGoal)
             }
             isGenerating={isGenerating}
           >
@@ -159,7 +171,14 @@ const CaptionGenerator: React.FC = () => {
               />
             )}
             
-            {currentStep > 2 && (
+            {currentStep === 3 && (
+              <GoalSelector
+                selectedGoal={selectedGoal}
+                onGoalChange={handleGoalChange}
+              />
+            )}
+            
+            {currentStep > 3 && (
               <div className="flex items-center justify-center h-full p-6">
                 <div className="text-center">
                   <h3 className="text-lg font-medium">Step {currentStep + 1} Content</h3>
