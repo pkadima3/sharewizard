@@ -1,6 +1,15 @@
 
 import { UserProfile } from "@/types";
 
+// Default request limits for each plan
+export const DEFAULT_REQUEST_LIMIT = {
+  free: 1,          // Free users get 1 request
+  trial: 5,         // Trial users get 5 requests
+  basic: 75,        // Basic plan: 75 requests/month
+  premium: 250,     // Premium plan: 250 requests/month
+  flexy: 250        // Flexy (one-time purchase) same as premium level
+};
+
 // Mock user data for development
 export const MOCK_USER_PROFILE: UserProfile = {
   id: "user123",

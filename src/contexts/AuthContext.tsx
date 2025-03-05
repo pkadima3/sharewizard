@@ -11,9 +11,21 @@ import {
   signInWithPopup,
   UserCredential
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { 
+  doc, 
+  setDoc, 
+  getDoc, 
+  serverTimestamp, 
+  collection, 
+  query, 
+  where, 
+  onSnapshot,
+  updateDoc,
+  increment
+} from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { DEFAULT_REQUEST_LIMIT } from '@/lib/constants';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -24,6 +36,8 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<UserCredential>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  incrementRequestUsage: () => Promise<boolean>;
+  subscription: any | null;
 }
 
 // Define an interface for the additionalData parameter
@@ -45,6 +59,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<any | null>(null);
+  const [subscription, setSubscription] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -56,7 +71,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const snapshot = await getDoc(userRef);
       
-      // Create user profile if it doesn't exist
       if (!snapshot.exists()) {
         const { email, displayName, photoURL } = user;
         const createdAt = serverTimestamp();
@@ -67,6 +81,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             email,
             photoURL: photoURL || '',
             createdAt,
+            requests_used: 0,
+            plan_type: 'free',
+            requests_limit: DEFAULT_REQUEST_LIMIT.free,
             ...additionalData,
           });
           
@@ -85,7 +102,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       
-      // Fetch and set the user profile
       const userDoc = await getDoc(userRef);
       if (userDoc.exists()) {
         setUserProfile({ id: userDoc.id, ...userDoc.data() });
@@ -100,17 +116,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const incrementRequestUsage = async (): Promise<boolean> => {
+    if (!currentUser || !userProfile) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to make requests",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      await updateDoc(userRef, {
+        requests_used: increment(1)
+      });
+
+      const updatedUserDoc = await getDoc(userRef);
+      if (updatedUserDoc.exists()) {
+        const userData = updatedUserDoc.data();
+        setUserProfile({ id: updatedUserDoc.id, ...userData });
+
+        if (userData.requests_used >= userData.requests_limit) {
+          toast({
+            title: "Request limit reached",
+            description: "You've reached your plan's request limit. Please upgrade to continue.",
+            variant: "destructive",
+          });
+          return false;
+        }
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      console.error("Error tracking request usage:", error);
+      toast({
+        title: "Error",
+        description: `Failed to track request usage: ${error.message}`,
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const signUp = async (email: string, password: string, username: string) => {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Update the user's profile with the username
       if (result.user) {
         await updateProfile(result.user, {
           displayName: username,
         });
         
-        // Create Firestore profile
         await createUserProfile(result.user, { displayName: username });
       }
       
@@ -147,11 +204,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    let unsubscribeFromSubscription: () => void = () => {};
+
+    if (currentUser) {
+      const subscriptionsRef = collection(db, 'customers', currentUser.uid, 'subscriptions');
+      const activeSubscriptionsQuery = query(
+        subscriptionsRef,
+        where('status', 'in', ['trialing', 'active'])
+      );
+
+      unsubscribeFromSubscription = onSnapshot(activeSubscriptionsQuery, (snapshot) => {
+        const subscriptionData = snapshot.docs[0]?.data();
+        
+        if (subscriptionData) {
+          console.log("Active subscription found:", subscriptionData);
+          setSubscription(subscriptionData);
+
+          const userRef = doc(db, 'users', currentUser.uid);
+          
+          const planType = subscriptionData.status === 'trialing' ? 'trial' : 
+                          (subscriptionData.role === 'premium' ? 'premium' : 
+                          (subscriptionData.role === 'basic' ? 'basic' : 'free'));
+          
+          const requestsLimit = subscriptionData.status === 'trialing' ? DEFAULT_REQUEST_LIMIT.trial :
+                              (subscriptionData.role === 'premium' ? DEFAULT_REQUEST_LIMIT.premium : 
+                              (subscriptionData.role === 'basic' ? DEFAULT_REQUEST_LIMIT.basic : 
+                              DEFAULT_REQUEST_LIMIT.free));
+          
+          const resetDate = new Date(subscriptionData.current_period_end.seconds * 1000);
+          
+          updateDoc(userRef, {
+            plan_type: planType,
+            requests_limit: requestsLimit,
+            reset_date: resetDate,
+            trial_end_date: subscriptionData.status === 'trialing' ? 
+                           new Date(subscriptionData.trial_end.seconds * 1000) : null
+          }).catch(error => {
+            console.error("Error updating user profile with subscription details:", error);
+          });
+        } else {
+          console.log("No active subscription found");
+          setSubscription(null);
+        }
+      }, (error) => {
+        console.error("Error getting subscription:", error);
+      });
+    }
+
+    return () => {
+      if (unsubscribeFromSubscription) {
+        unsubscribeFromSubscription();
+      }
+    };
+  }, [currentUser]);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       
       if (user) {
-        // Fetch user profile when user logs in
         try {
           const userRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userRef);
@@ -159,7 +270,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (userDoc.exists()) {
             setUserProfile({ id: userDoc.id, ...userDoc.data() });
           } else {
-            // Create profile if it doesn't exist
             await createUserProfile(user);
           }
         } catch (error: any) {
@@ -186,7 +296,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     loginWithGoogle,
     logout,
-    resetPassword
+    resetPassword,
+    incrementRequestUsage,
+    subscription
   };
 
   return (

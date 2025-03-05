@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { UserStats, SubscriptionTier } from '@/types';
-import { PLAN_LIMITS } from '@/lib/constants';
+import { PLAN_LIMITS, DEFAULT_REQUEST_LIMIT } from '@/lib/constants';
 import { 
   BarChart3, 
   MessageSquareText, 
@@ -10,8 +10,13 @@ import {
   Twitter,
   Linkedin,
   Facebook,
-  Share
+  Share,
+  Calendar,
+  CircleDollarSign
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { calculateUsagePercentage, formatPlanName, getDaysRemainingInPlan, getSuggestedUpgrade } from '@/lib/subscriptionUtils';
+import { Button } from '@/components/ui/button';
 
 interface UsageStatsProps {
   stats: UserStats;
@@ -19,6 +24,8 @@ interface UsageStatsProps {
 }
 
 const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
+  const { userProfile, subscription } = useAuth();
+  
   // Calculate usage percentages
   const aiUsagePercentage = Math.min(
     (stats.aiRequestsUsed / stats.aiRequestsLimit) * 100, 
@@ -27,32 +34,75 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
   
   const planLimits = PLAN_LIMITS[subscriptionTier];
   
+  // Get actual subscription data from Auth context if available
+  const planType = userProfile?.plan_type || 'free';
+  const requestsUsed = userProfile?.requests_used || 0;
+  const requestsLimit = userProfile?.requests_limit || DEFAULT_REQUEST_LIMIT.free;
+  const usagePercentage = calculateUsagePercentage(requestsUsed, requestsLimit);
+
+  // Get trial or reset date
+  const endDate = userProfile?.trial_end_date || userProfile?.reset_date || null;
+  const daysRemaining = endDate ? getDaysRemainingInPlan(endDate) : 0;
+  
+  // Suggested upgrade message
+  const upgradeMessage = getSuggestedUpgrade(planType);
+  
   return (
     <div className="space-y-6 animate-fade-in">
       <h2 className="text-2xl font-semibold">Usage Statistics</h2>
       
       <div className="space-y-6">
-        {/* AI Requests Progress */}
+        {/* Plan Information */}
         <div className="stats-card">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center">
-              <BarChart3 className="w-5 h-5 text-blue-500 mr-2" />
-              <h3 className="font-medium">AI Requests</h3>
+              <CircleDollarSign className="w-5 h-5 text-blue-500 mr-2" />
+              <h3 className="font-medium">Current Plan: {formatPlanName(planType)}</h3>
             </div>
+            {endDate && (
+              <div className="flex items-center text-sm">
+                <Calendar className="w-4 h-4 text-gray-500 mr-1" />
+                <span>{planType === 'trial' ? 'Trial ends' : 'Resets'} in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Requests Progress */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Request Usage</span>
             <span className="text-sm font-medium">
-              {stats.aiRequestsUsed}/{stats.aiRequestsLimit}
+              {requestsUsed}/{requestsLimit}
             </span>
           </div>
           
           <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
             <div 
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-500 ease-out"
-              style={{ width: `${aiUsagePercentage}%` }}
+              className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ease-out ${
+                usagePercentage > 90 ? 'bg-red-500' : usagePercentage > 75 ? 'bg-orange-500' : 'bg-gradient-to-r from-blue-400 to-blue-600'
+              }`}
+              style={{ width: `${usagePercentage}%` }}
             ></div>
           </div>
           
-          <div className="mt-2 text-sm text-gray-500">
-            {stats.aiRequestsLimit - stats.aiRequestsUsed} requests remaining
+          <div className="mt-2 text-sm text-gray-500 flex justify-between">
+            <div>{requestsLimit - requestsUsed} requests remaining</div>
+            {usagePercentage > 75 && (
+              <div className={usagePercentage > 90 ? 'text-red-500 font-medium' : 'text-orange-500'}>
+                {usagePercentage > 90 ? 'Almost out of requests!' : 'Running low on requests'}
+              </div>
+            )}
+          </div>
+          
+          {/* Upgrade Prompt */}
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+            <p className="text-sm text-gray-700 mb-3">{upgradeMessage}</p>
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="w-full sm:w-auto"
+            >
+              Upgrade Plan
+            </Button>
           </div>
         </div>
         
