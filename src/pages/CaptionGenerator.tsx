@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { WizardLayout, WizardStep } from '@/components/WizardLayout';
 import MediaUploader from '@/components/MediaUploader';
 import NicheSelector from '@/components/NicheSelector';
+import PlatformSelector from '@/components/PlatformSelector';
 import { toast } from "sonner";
 
 const CaptionGenerator: React.FC = () => {
@@ -11,6 +12,7 @@ const CaptionGenerator: React.FC = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedNiche, setSelectedNiche] = useState<string>('');
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
 
   // Clean up URL objects when component unmounts or when URL changes
   useEffect(() => {
@@ -37,7 +39,7 @@ const CaptionGenerator: React.FC = () => {
     {
       title: "Platform",
       description: "Select social media platform",
-      isCompleted: false
+      isCompleted: !!selectedPlatform
     },
     {
       title: "Goal",
@@ -79,6 +81,10 @@ const CaptionGenerator: React.FC = () => {
     setSelectedNiche(niche);
   };
 
+  const handlePlatformChange = (platform: string) => {
+    setSelectedPlatform(platform);
+  };
+
   const handleNext = () => {
     if (currentStep === 0 && !selectedMedia) {
       toast.error("Please upload a media file to continue");
@@ -87,6 +93,11 @@ const CaptionGenerator: React.FC = () => {
 
     if (currentStep === 1 && !selectedNiche) {
       toast.error("Please select or enter a niche to continue");
+      return;
+    }
+    
+    if (currentStep === 2 && !selectedPlatform) {
+      toast.error("Please select a platform to continue");
       return;
     }
     
@@ -121,7 +132,8 @@ const CaptionGenerator: React.FC = () => {
             onPrev={handlePrev}
             isNextDisabled={
               (currentStep === 0 && !selectedMedia) || 
-              (currentStep === 1 && !selectedNiche)
+              (currentStep === 1 && !selectedNiche) ||
+              (currentStep === 2 && !selectedPlatform)
             }
             isGenerating={isGenerating}
           >
@@ -140,7 +152,14 @@ const CaptionGenerator: React.FC = () => {
               />
             )}
             
-            {currentStep > 1 && (
+            {currentStep === 2 && (
+              <PlatformSelector
+                selectedPlatform={selectedPlatform}
+                onPlatformChange={handlePlatformChange}
+              />
+            )}
+            
+            {currentStep > 2 && (
               <div className="flex items-center justify-center h-full p-6">
                 <div className="text-center">
                   <h3 className="text-lg font-medium">Step {currentStep + 1} Content</h3>
