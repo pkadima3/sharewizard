@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WizardLayout, WizardStep } from '@/components/WizardLayout';
 import MediaUploader from '@/components/MediaUploader';
 import { toast } from "sonner";
@@ -9,6 +9,16 @@ const CaptionGenerator: React.FC = () => {
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Clean up URL objects when component unmounts or when URL changes
+  useEffect(() => {
+    // Clean up function to revoke object URL when component unmounts or URL changes
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // Define wizard steps
   const steps: WizardStep[] = [
@@ -53,16 +63,14 @@ const CaptionGenerator: React.FC = () => {
     
     setSelectedMedia(file);
     
+    // Clean up previous URL if it exists
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    
     // Create object URL for preview
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
-    
-    // Clean up previous URL if it exists
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
   };
 
   const handleNext = () => {
