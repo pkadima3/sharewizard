@@ -27,6 +27,12 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
 }
 
+// Define an interface for the additionalData parameter
+interface AdditionalUserData {
+  displayName?: string;
+  [key: string]: any;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
@@ -43,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  const createUserProfile = async (user: User, additionalData = {}) => {
+  const createUserProfile = async (user: User, additionalData: AdditionalUserData = {}) => {
     if (!user) return;
     
     const userRef = doc(db, 'users', user.uid);
