@@ -34,7 +34,11 @@ service cloud.firestore {
     
     // Allow users to read and write only their own profile
     match /users/{userId} {
-      allow read, write: if request.auth.uid == userId;
+      allow read, create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId 
+                     && (!request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['plan_type', 'subscription_id', 'trial_end_date']));
+      allow delete: if false;  // Users cannot delete their profiles directly
     }
 
     // =============================

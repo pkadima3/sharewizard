@@ -26,6 +26,7 @@ import {
 import { auth, db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { DEFAULT_REQUEST_LIMIT } from '@/lib/constants';
+import { checkUserPlan } from '@/lib/subscriptionUtils';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -37,10 +38,14 @@ interface AuthContextType {
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   incrementRequestUsage: () => Promise<boolean>;
+  checkRequestAvailability: () => Promise<{
+    canMakeRequest: boolean;
+    message: string;
+    usagePercentage: number;
+  }>;
   subscription: any | null;
 }
 
-// Define an interface for the additionalData parameter
 interface AdditionalUserData {
   displayName?: string;
   [key: string]: any;
@@ -98,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             description: `Failed to create user profile: ${error.message || 'Check Firestore rules'}`,
             variant: "destructive",
           });
-          throw error; // Re-throw to be caught by the caller
+          throw error;
         }
       }
       
@@ -127,6 +132,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      const planCheck = await checkUserPlan(currentUser.uid);
+      
+      if (planCheck.status !== 'OK') {
+        toast({
+          title: planCheck.status === 'UPGRADE' ? "Upgrade Required" : "Request Limit Reached",
+          description: planCheck.message,
+          variant: "destructive",
+        });
+        return false;
+      }
+      
+      if (planCheck.usagePercentage >= 80) {
+        toast({
+          title: "Running Low on Requests",
+          description: planCheck.message,
+        });
+      }
+
       const userRef = doc(db, 'users', currentUser.uid);
       await updateDoc(userRef, {
         requests_used: increment(1)
@@ -136,7 +159,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (updatedUserDoc.exists()) {
         const userData = updatedUserDoc.data();
         setUserProfile({ id: updatedUserDoc.id, ...userData });
-
+        
         if (userData.requests_used >= userData.requests_limit) {
           toast({
             title: "Request limit reached",
@@ -156,6 +179,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: "destructive",
       });
       return false;
+    }
+  };
+
+  const checkRequestAvailability = async (): Promise<{
+    canMakeRequest: boolean;
+    message: string;
+    usagePercentage: number;
+  }> => {
+    if (!currentUser) {
+      return {
+        canMakeRequest: false,
+        message: "You must be logged in to make requests",
+        usagePercentage: 0
+      };
+    }
+
+    try {
+      const planCheck = await checkUserPlan(currentUser.uid);
+      
+      return {
+        canMakeRequest: planCheck.status === 'OK',
+        message: planCheck.message,
+        usagePercentage: planCheck.usagePercentage
+      };
+    } catch (error: any) {
+      console.error("Error checking request availability:", error);
+      return {
+        canMakeRequest: false,
+        message: `Error: ${error.message}`,
+        usagePercentage: 0
+      };
     }
   };
 
@@ -298,6 +352,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     resetPassword,
     incrementRequestUsage,
+    checkRequestAvailability,
     subscription
   };
 

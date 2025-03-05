@@ -1,11 +1,7 @@
-
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
 import { DEFAULT_REQUEST_LIMIT } from './constants';
 
-/**
- * Checks if a user has enough requests remaining
- */
 export const checkUserRequestAvailability = async (userId: string): Promise<{
   canMakeRequest: boolean;
   requestsUsed: number;
@@ -47,17 +43,91 @@ export const checkUserRequestAvailability = async (userId: string): Promise<{
   }
 };
 
-/**
- * Returns the requests usage percentage
- */
+export const checkUserPlan = async (userId: string): Promise<{
+  status: 'OK' | 'UPGRADE' | 'LIMIT_REACHED';
+  message: string;
+  usagePercentage: number;
+}> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      return { 
+        status: 'UPGRADE', 
+        message: 'User profile not found. Please contact support.',
+        usagePercentage: 100
+      };
+    }
+
+    const userData = userDoc.data();
+    const requestsUsed = userData.requests_used || 0;
+    const requestsLimit = userData.requests_limit || DEFAULT_REQUEST_LIMIT.free;
+    const planType = userData.plan_type || 'free';
+    const usagePercentage = calculateUsagePercentage(requestsUsed, requestsLimit);
+    
+    if (requestsUsed >= requestsLimit) {
+      if (planType === 'free') {
+        return {
+          status: 'UPGRADE',
+          message: 'You have used all your free requests. Start a trial or upgrade to continue.',
+          usagePercentage
+        };
+      } else if (planType === 'trial') {
+        return {
+          status: 'UPGRADE',
+          message: 'Your trial requests are used up. Upgrade to a paid plan to continue.',
+          usagePercentage
+        };
+      } else if (planType === 'basic') {
+        return {
+          status: 'LIMIT_REACHED',
+          message: 'You have reached your monthly request limit. Upgrade to Premium or add Flex packs.',
+          usagePercentage
+        };
+      } else if (planType === 'premium') {
+        return {
+          status: 'LIMIT_REACHED',
+          message: 'You have reached your monthly request limit. Add Flex packs for additional requests.',
+          usagePercentage
+        };
+      } else if (planType === 'flexy') {
+        return {
+          status: 'LIMIT_REACHED',
+          message: 'You have used all your Flex requests. Purchase more to continue.',
+          usagePercentage
+        };
+      }
+    }
+    
+    if (usagePercentage >= 80) {
+      return {
+        status: 'OK',
+        message: `You're running low on requests (${requestsLimit - requestsUsed} left). Consider upgrading soon.`,
+        usagePercentage
+      };
+    }
+    
+    return {
+      status: 'OK',
+      message: `You have ${requestsLimit - requestsUsed} requests remaining.`,
+      usagePercentage
+    };
+  } catch (error: any) {
+    console.error("Error checking user plan:", error);
+    return { 
+      status: 'UPGRADE', 
+      message: `Error checking plan: ${error.message}`,
+      usagePercentage: 0
+    };
+  }
+};
+
 export const calculateUsagePercentage = (used: number, limit: number): number => {
-  if (limit === 0) return 100; // Prevent division by zero
+  if (limit === 0) return 100;
   return Math.min((used / limit) * 100, 100);
 };
 
-/**
- * Formats plan name for display
- */
 export const formatPlanName = (planType: string): string => {
   switch (planType) {
     case 'free':
@@ -75,13 +145,9 @@ export const formatPlanName = (planType: string): string => {
   }
 };
 
-/**
- * Returns days remaining in trial or subscription period
- */
 export const getDaysRemainingInPlan = (endDate: any): number => {
   if (!endDate) return 0;
   
-  // Convert Firestore timestamp to Date if needed
   const endDateTime = endDate.seconds ? 
     new Date(endDate.seconds * 1000) : 
     new Date(endDate);
@@ -90,12 +156,9 @@ export const getDaysRemainingInPlan = (endDate: any): number => {
   const diffTime = endDateTime.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  return Math.max(0, diffDays); // Don't return negative days
+  return Math.max(0, diffDays);
 };
 
-/**
- * Suggests an upgrade based on current plan
- */
 export const getSuggestedUpgrade = (currentPlan: string): string => {
   switch (currentPlan) {
     case 'free':
@@ -110,5 +173,37 @@ export const getSuggestedUpgrade = (currentPlan: string): string => {
       return 'Need more requests? Purchase additional Flex packs anytime.';
     default:
       return 'Upgrade your plan to access more features.';
+  }
+};
+
+export const resetUsageCounter = async (userId: string): Promise<boolean> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      requests_used: 0
+    });
+    return true;
+  } catch (error) {
+    console.error("Error resetting usage counter:", error);
+    return false;
+  }
+};
+
+export const handleMidSessionLimitReaching = async (userId: string): Promise<boolean> => {
+  const { canMakeRequest, requestsUsed, requestsLimit } = await checkUserRequestAvailability(userId);
+  return requestsUsed === requestsLimit - 1;
+};
+
+export const addFlexRequests = async (userId: string, additionalRequests: number): Promise<boolean> => {
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+      requests_limit: increment(additionalRequests),
+      plan_type: 'flexy'
+    });
+    return true;
+  } catch (error) {
+    console.error("Error adding flex requests:", error);
+    return false;
   }
 };

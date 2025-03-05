@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { UserStats, SubscriptionTier } from '@/types';
 import { PLAN_LIMITS, DEFAULT_REQUEST_LIMIT } from '@/lib/constants';
 import { 
@@ -13,13 +13,24 @@ import {
   Share,
   Calendar,
   CircleDollarSign,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle,
+  ShoppingCart,
+  Timer
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculateUsagePercentage, formatPlanName, getDaysRemainingInPlan, getSuggestedUpgrade } from '@/lib/subscriptionUtils';
 import { Button } from '@/components/ui/button';
 import { createSubscriptionCheckout, createFlexCheckout, openCustomerPortal } from '@/lib/stripe';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface UsageStatsProps {
   stats: UserStats;
@@ -29,6 +40,8 @@ interface UsageStatsProps {
 const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
   const { userProfile, subscription, currentUser } = useAuth();
   const { toast } = useToast();
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
   
   // Calculate usage percentages
   const aiUsagePercentage = Math.min(
@@ -47,6 +60,10 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
   // Get trial or reset date
   const endDate = userProfile?.trial_end_date || userProfile?.reset_date || null;
   const daysRemaining = endDate ? getDaysRemainingInPlan(endDate) : 0;
+  
+  // Determine if user is running low on requests
+  const isRunningLow = usagePercentage >= 80;
+  const isOutOfRequests = usagePercentage >= 100;
   
   // Suggested upgrade message
   const upgradeMessage = getSuggestedUpgrade(planType);
@@ -76,14 +93,10 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
           // Upgrade to premium
           priceId = "price_premium_monthly"; // Replace with your actual price ID
           break;
-        case 'premium':
-        case 'flexy':
-          // Buy flex pack
-          priceId = "price_flex_pack"; // Replace with your actual price ID
-          const quantity = 1;
-          const url = await createFlexCheckout(currentUser.uid, priceId, quantity);
-          window.location.assign(url);
-          return;
+        default:
+          // Default to basic plan
+          priceId = "price_basic_monthly";
+          break;
       }
 
       const url = await createSubscriptionCheckout(currentUser.uid, priceId);
@@ -93,6 +106,35 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
       toast({
         title: "Error",
         description: `Failed to upgrade plan: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle buying Flex packs
+  const handleBuyFlex = async () => {
+    if (!currentUser) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to purchase Flex packs",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Close the modal
+      setIsUpgradeModalOpen(false);
+      
+      // Buy flex pack
+      const priceId = "price_flex_pack"; // Replace with your actual price ID
+      const url = await createFlexCheckout(currentUser.uid, priceId, selectedQuantity);
+      window.location.assign(url);
+    } catch (error: any) {
+      console.error("Error purchasing Flex pack:", error);
+      toast({
+        title: "Error",
+        description: `Failed to purchase Flex pack: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -137,7 +179,16 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
             {endDate && (
               <div className="flex items-center text-sm">
                 <Calendar className="w-4 h-4 text-gray-500 mr-1" />
-                <span>{planType === 'trial' ? 'Trial ends' : 'Resets'} in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}</span>
+                <span>
+                  {planType === 'trial' ? (
+                    <span className="flex items-center">
+                      <Timer className="w-4 h-4 text-blue-500 mr-1" />
+                      Trial ends in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}
+                    </span>
+                  ) : (
+                    <span>Resets in {daysRemaining} day{daysRemaining !== 1 ? 's' : ''}</span>
+                  )}
+                </span>
               </div>
             )}
           </div>
@@ -161,25 +212,94 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
           
           <div className="mt-2 text-sm text-gray-500 flex justify-between">
             <div>{requestsLimit - requestsUsed} requests remaining</div>
-            {usagePercentage > 75 && (
-              <div className={usagePercentage > 90 ? 'text-red-500 font-medium' : 'text-orange-500'}>
-                {usagePercentage > 90 ? 'Almost out of requests!' : 'Running low on requests'}
+            {isRunningLow && (
+              <div className={isOutOfRequests ? 'text-red-500 font-medium flex items-center' : 'text-orange-500 flex items-center'}>
+                {isOutOfRequests ? (
+                  <>
+                    <AlertTriangle className="w-4 h-4 mr-1" />
+                    Out of requests!
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-4 h-4 mr-1" />
+                    Running low on requests
+                  </>
+                )}
               </div>
             )}
           </div>
           
           {/* Upgrade Prompt */}
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+          <div className={`mt-4 p-4 rounded-lg border ${isOutOfRequests ? 'bg-red-50 border-red-100' : isRunningLow ? 'bg-orange-50 border-orange-100' : 'bg-gray-50 border-gray-100'}`}>
             <p className="text-sm text-gray-700 mb-3">{upgradeMessage}</p>
             <div className="flex flex-col sm:flex-row gap-3">
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="w-full sm:w-auto"
-                onClick={handleUpgrade}
-              >
-                Upgrade Plan
-              </Button>
+              {/* Show different buttons based on plan type */}
+              {planType === 'free' && (
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="w-full sm:w-auto"
+                  onClick={handleUpgrade}
+                >
+                  Start 5-Day Free Trial
+                </Button>
+              )}
+              
+              {planType === 'trial' && (
+                <>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    className="w-full sm:w-auto"
+                    onClick={handleUpgrade}
+                  >
+                    Upgrade Now
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full sm:w-auto"
+                    onClick={handleOpenPortal}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Cancel Trial
+                  </Button>
+                </>
+              )}
+              
+              {planType === 'basic' && (
+                <>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    className="w-full sm:w-auto"
+                    onClick={handleUpgrade}
+                  >
+                    Upgrade to Premium
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full sm:w-auto bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:text-green-800"
+                    onClick={() => setIsUpgradeModalOpen(true)}
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Buy Flex Pack
+                  </Button>
+                </>
+              )}
+              
+              {(planType === 'premium' || planType === 'flexy') && (
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                  onClick={() => setIsUpgradeModalOpen(true)}
+                >
+                  <ShoppingCart className="w-4 h-4 mr-2" />
+                  Buy More Requests
+                </Button>
+              )}
               
               {/* Only show manage subscription button for paid users */}
               {(planType === 'basic' || planType === 'premium' || planType === 'trial') && (
@@ -274,6 +394,61 @@ const UsageStats: React.FC<UsageStatsProps> = ({ stats, subscriptionTier }) => {
           </div>
         </div>
       </div>
+      
+      {/* Buy Flex Modal */}
+      <Dialog open={isUpgradeModalOpen} onOpenChange={setIsUpgradeModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Purchase Additional Requests</DialogTitle>
+            <DialogDescription>
+              Flex packs give you additional requests that never expire. Buy as many as you need.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="mb-4">
+              <h4 className="text-sm font-medium mb-2">Select quantity:</h4>
+              <div className="flex gap-2">
+                {[1, 2, 5, 10].map(qty => (
+                  <Button
+                    key={qty}
+                    variant={selectedQuantity === qty ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedQuantity(qty)}
+                    className={`flex-1 ${selectedQuantity === qty ? 'bg-blue-500' : ''}`}
+                  >
+                    {qty} {qty === 1 ? 'pack' : 'packs'}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="flex justify-between mb-2">
+                <span>Price per pack:</span>
+                <span className="font-medium">$9.99</span>
+              </div>
+              <div className="flex justify-between font-medium text-lg">
+                <span>Total:</span>
+                <span>${(9.99 * selectedQuantity).toFixed(2)}</span>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Each pack gives you 50 additional requests that never expire.
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUpgradeModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleBuyFlex} className="bg-green-600 hover:bg-green-700">
+              <ShoppingCart className="w-4 h-4 mr-2" />
+              Purchase Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
