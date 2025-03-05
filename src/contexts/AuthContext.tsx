@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   User, 
@@ -53,40 +52,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     
     const userRef = doc(db, 'users', user.uid);
-    const snapshot = await getDoc(userRef);
     
-    // Create user profile if it doesn't exist
-    if (!snapshot.exists()) {
-      const { email, displayName, photoURL } = user;
-      const createdAt = serverTimestamp();
+    try {
+      const snapshot = await getDoc(userRef);
       
-      try {
-        await setDoc(userRef, {
-          displayName: displayName || additionalData.displayName || '',
-          email,
-          photoURL: photoURL || '',
-          createdAt,
-          ...additionalData,
-        });
+      // Create user profile if it doesn't exist
+      if (!snapshot.exists()) {
+        const { email, displayName, photoURL } = user;
+        const createdAt = serverTimestamp();
         
-        toast({
-          title: "Profile created",
-          description: "Your user profile has been created successfully",
-        });
-      } catch (error) {
-        console.error("Error creating user profile:", error);
-        toast({
-          title: "Error",
-          description: "Failed to create user profile",
-          variant: "destructive",
-        });
+        try {
+          await setDoc(userRef, {
+            displayName: displayName || additionalData.displayName || '',
+            email,
+            photoURL: photoURL || '',
+            createdAt,
+            ...additionalData,
+          });
+          
+          toast({
+            title: "Profile created",
+            description: "Your user profile has been created successfully",
+          });
+        } catch (error: any) {
+          console.error("Error creating user profile:", error);
+          toast({
+            title: "Error",
+            description: `Failed to create user profile: ${error.message || 'Check Firestore rules'}`,
+            variant: "destructive",
+          });
+          throw error; // Re-throw to be caught by the caller
+        }
       }
-    }
-    
-    // Fetch and set the user profile
-    const userDoc = await getDoc(userRef);
-    if (userDoc.exists()) {
-      setUserProfile({ id: userDoc.id, ...userDoc.data() });
+      
+      // Fetch and set the user profile
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        setUserProfile({ id: userDoc.id, ...userDoc.data() });
+      }
+    } catch (error: any) {
+      console.error("Error in profile creation flow:", error);
+      toast({
+        title: "Error",
+        description: `Profile creation failed: ${error.message || 'Permission denied - check Firestore rules'}`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -142,14 +152,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (user) {
         // Fetch user profile when user logs in
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
-        
-        if (userDoc.exists()) {
-          setUserProfile({ id: userDoc.id, ...userDoc.data() });
-        } else {
-          // Create profile if it doesn't exist
-          await createUserProfile(user);
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            setUserProfile({ id: userDoc.id, ...userDoc.data() });
+          } else {
+            // Create profile if it doesn't exist
+            await createUserProfile(user);
+          }
+        } catch (error: any) {
+          console.error("Error fetching user profile:", error);
+          toast({
+            title: "Error",
+            description: `Failed to load profile: ${error.message || 'Check your connection'}`,
+            variant: "destructive",
+          });
         }
       }
       
