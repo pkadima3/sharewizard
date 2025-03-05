@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { WizardLayout, WizardStep } from '@/components/WizardLayout';
 import MediaUploader from '@/components/MediaUploader';
+import NicheSelector from '@/components/NicheSelector';
 import { toast } from "sonner";
 
 const CaptionGenerator: React.FC = () => {
@@ -9,6 +10,7 @@ const CaptionGenerator: React.FC = () => {
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedNiche, setSelectedNiche] = useState<string>('');
 
   // Clean up URL objects when component unmounts or when URL changes
   useEffect(() => {
@@ -30,7 +32,7 @@ const CaptionGenerator: React.FC = () => {
     {
       title: "Select Niche",
       description: "Choose a niche for your content",
-      isCompleted: false
+      isCompleted: !!selectedNiche
     },
     {
       title: "Platform",
@@ -73,9 +75,18 @@ const CaptionGenerator: React.FC = () => {
     setPreviewUrl(objectUrl);
   };
 
+  const handleNicheChange = (niche: string) => {
+    setSelectedNiche(niche);
+  };
+
   const handleNext = () => {
     if (currentStep === 0 && !selectedMedia) {
       toast.error("Please upload a media file to continue");
+      return;
+    }
+
+    if (currentStep === 1 && !selectedNiche) {
+      toast.error("Please select or enter a niche to continue");
       return;
     }
     
@@ -108,7 +119,10 @@ const CaptionGenerator: React.FC = () => {
             steps={steps}
             onNext={handleNext}
             onPrev={handlePrev}
-            isNextDisabled={currentStep === 0 && !selectedMedia}
+            isNextDisabled={
+              (currentStep === 0 && !selectedMedia) || 
+              (currentStep === 1 && !selectedNiche)
+            }
             isGenerating={isGenerating}
           >
             {currentStep === 0 && (
@@ -119,7 +133,14 @@ const CaptionGenerator: React.FC = () => {
               />
             )}
             
-            {currentStep > 0 && (
+            {currentStep === 1 && (
+              <NicheSelector 
+                selectedNiche={selectedNiche}
+                onNicheChange={handleNicheChange}
+              />
+            )}
+            
+            {currentStep > 1 && (
               <div className="flex items-center justify-center h-full p-6">
                 <div className="text-center">
                   <h3 className="text-lg font-medium">Step {currentStep + 1} Content</h3>
