@@ -1,8 +1,10 @@
 
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Navbar';
+import { Button } from '@/components/ui/button';
+import { Upload, Camera, PenTool, Sparkles } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { currentUser, userProfile } = useAuth();
@@ -31,14 +33,24 @@ const Dashboard: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="stats-card dark:bg-gray-800 dark:text-white">
-            <h3 className="text-lg font-medium">Recent Activity</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Your recent content creation activity</p>
-            <div className="mt-4">
-              <p className="text-center text-gray-500 dark:text-gray-400">No recent activity</p>
+        {/* Feature Cards */}
+        <div className="grid grid-cols-1 gap-6 mb-8 sm:grid-cols-2 lg:grid-cols-3">
+          <Link to="/caption-generator" className="block">
+            <div className="stats-card dark:bg-gray-800 dark:text-white hover:translate-y-[-5px] transition-all">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-lg font-medium">AI Caption Generator</h3>
+              </div>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Create engaging captions for your social media content with AI
+              </p>
+              <Button className="w-full mt-4">
+                Generate Captions
+              </Button>
             </div>
-          </div>
+          </Link>
 
           <div className="stats-card dark:bg-gray-800 dark:text-white">
             <h3 className="text-lg font-medium">Engagement Metrics</h3>
@@ -52,15 +64,18 @@ const Dashboard: React.FC = () => {
             <h3 className="text-lg font-medium">Quick Actions</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">Common tasks you might want to do</p>
             <div className="mt-4 space-y-2">
-              <button className="w-full p-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-colors">
+              <Button className="w-full flex items-center gap-2">
+                <PenTool className="h-4 w-4" />
                 Create New Post
-              </button>
-              <button className="w-full p-2 text-sm font-medium text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-white rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                Schedule Content
-              </button>
-              <button className="w-full p-2 text-sm font-medium text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-white rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                Analyze Performance
-              </button>
+              </Button>
+              <Button variant="outline" className="w-full flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Upload Content
+              </Button>
+              <Button variant="outline" className="w-full flex items-center gap-2">
+                <Camera className="h-4 w-4" />
+                Create Media
+              </Button>
             </div>
           </div>
         </div>
