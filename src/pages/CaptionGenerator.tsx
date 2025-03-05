@@ -5,6 +5,7 @@ import MediaUploader from '@/components/MediaUploader';
 import NicheSelector from '@/components/NicheSelector';
 import PlatformSelector from '@/components/PlatformSelector';
 import GoalSelector from '@/components/GoalSelector';
+import ToneSelector from '@/components/ToneSelector';
 import { toast } from "sonner";
 
 const CaptionGenerator: React.FC = () => {
@@ -15,6 +16,7 @@ const CaptionGenerator: React.FC = () => {
   const [selectedNiche, setSelectedNiche] = useState<string>('');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const [selectedGoal, setSelectedGoal] = useState<string>('');
+  const [selectedTone, setSelectedTone] = useState<string>('');
 
   // Clean up URL objects when component unmounts or when URL changes
   useEffect(() => {
@@ -51,7 +53,7 @@ const CaptionGenerator: React.FC = () => {
     {
       title: "Tone",
       description: "Choose the tone for your caption",
-      isCompleted: false
+      isCompleted: !!selectedTone
     },
     {
       title: "Generated Captions",
@@ -91,6 +93,21 @@ const CaptionGenerator: React.FC = () => {
     setSelectedGoal(goal);
   };
 
+  const handleToneChange = (tone: string) => {
+    setSelectedTone(tone);
+  };
+
+  const handleGenerate = () => {
+    setIsGenerating(true);
+    
+    // Simulate API call with setTimeout
+    setTimeout(() => {
+      setIsGenerating(false);
+      setCurrentStep(prev => prev + 1);
+      toast.success("Captions generated successfully!");
+    }, 2000);
+  };
+
   const handleNext = () => {
     if (currentStep === 0 && !selectedMedia) {
       toast.error("Please upload a media file to continue");
@@ -109,6 +126,11 @@ const CaptionGenerator: React.FC = () => {
     
     if (currentStep === 3 && !selectedGoal) {
       toast.error("Please select a content goal to continue");
+      return;
+    }
+    
+    if (currentStep === 4 && !selectedTone) {
+      toast.error("Please select a content tone to continue");
       return;
     }
     
@@ -145,9 +167,11 @@ const CaptionGenerator: React.FC = () => {
               (currentStep === 0 && !selectedMedia) || 
               (currentStep === 1 && !selectedNiche) ||
               (currentStep === 2 && !selectedPlatform) ||
-              (currentStep === 3 && !selectedGoal)
+              (currentStep === 3 && !selectedGoal) ||
+              (currentStep === 4 && !selectedTone)
             }
             isGenerating={isGenerating}
+            hideNextButton={currentStep === 4}
           >
             {currentStep === 0 && (
               <MediaUploader 
@@ -178,10 +202,19 @@ const CaptionGenerator: React.FC = () => {
               />
             )}
             
-            {currentStep > 3 && (
+            {currentStep === 4 && (
+              <ToneSelector
+                selectedTone={selectedTone}
+                onToneChange={handleToneChange}
+                onGenerate={handleGenerate}
+                isGenerating={isGenerating}
+              />
+            )}
+            
+            {currentStep === 5 && (
               <div className="flex items-center justify-center h-full p-6">
                 <div className="text-center">
-                  <h3 className="text-lg font-medium">Step {currentStep + 1} Content</h3>
+                  <h3 className="text-lg font-medium">Generated Captions</h3>
                   <p className="text-gray-500 dark:text-gray-400">
                     This step will be implemented in the next phase.
                   </p>
