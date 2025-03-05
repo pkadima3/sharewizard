@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Briefcase, Smile, LucideIcon, Target, Sparkles, BookOpen, Button as ButtonIcon } from 'lucide-react';
+import { Briefcase, Smile, LucideIcon, Target, Sparkles, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 
@@ -26,7 +25,7 @@ const CONTENT_TONES = [
     id: 'humorous',
     title: 'Humorous',
     description: 'Fun and entertaining style',
-    icon: ButtonIcon,
+    icon: Smile,
     bgColor: 'bg-gradient-to-r from-amber-400 to-orange-500',
     hoverBgColor: 'hover:shadow-lg hover:shadow-orange-500/20',
   },
