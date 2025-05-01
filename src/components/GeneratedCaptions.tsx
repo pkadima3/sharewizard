@@ -1,11 +1,8 @@
 
-import React, { useState, useRef } from 'react';
-import { Button } from "@/components/ui/button";
+import React from 'react';
 import { useCaptionGeneration } from '@/hooks/useCaptionGeneration';
-import useMediaType from '@/hooks/useMediaType';
-import CaptionsList from './captions/CaptionsList';
-import CaptionEditor from './captions/CaptionEditor';
-import CaptionSharingActions from './captions/CaptionSharingActions';
+import CaptionRegenerationHeader from './captions/CaptionRegenerationHeader';
+import CaptionContent from './captions/CaptionContent';
 import ErrorDisplay from './captions/ErrorDisplay';
 import GenerationLoading from './captions/GenerationLoading';
 import EmptyState from './captions/EmptyState';
@@ -39,14 +36,6 @@ const GeneratedCaptions: React.FC<GeneratedCaptionsProps> = ({
   onCaptionOverlayModeChange,
   postIdea
 }) => {
-  const [isDownloading, setIsDownloading] = useState<boolean>(false);
-  const [isSharing, setIsSharing] = useState<boolean>(false);
-  const [isEditing, setIsEditing] = useState(false);
-  
-  const previewRef = useRef<HTMLDivElement>(null);
-  
-  const mediaType = useMediaType(isTextOnly, selectedMedia);
-  
   // Use our custom hook for caption generation
   const {
     captions,
@@ -96,79 +85,23 @@ const GeneratedCaptions: React.FC<GeneratedCaptionsProps> = ({
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold dark:text-white">Choose Your Caption</h2>
-        <div className="flex items-center gap-4">
-          {requestsRemaining !== null && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {requestsRemaining} requests remaining
-            </span>
-          )}
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={handleRegenerateClick}
-          >
-            Regenerate
-          </Button>
-        </div>
-      </div>
+      <CaptionRegenerationHeader 
+        requestsRemaining={requestsRemaining}
+        onRegenerateClick={handleRegenerateClick}
+      />
       
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="lg:w-2/5">
-          <CaptionsList 
-            captions={captions}
-            selectedCaption={selectedCaption}
-            setSelectedCaption={setSelectedCaption}
-          />
-        </div>
-        
-        <div className="lg:w-3/5">
-          <div className="sticky top-6 space-y-4">
-            <CaptionEditor
-              selectedMedia={selectedMedia}
-              previewUrl={previewUrl}
-              captions={captions}
-              selectedCaption={selectedCaption}
-              setCaptions={setCaptions}
-              isTextOnly={isTextOnly}
-              captionOverlayMode={captionOverlayMode}
-              onCaptionOverlayModeChange={onCaptionOverlayModeChange}
-              onShareClick={() => {
-                if (previewRef.current) {
-                  setIsSharing(true);
-                } else {
-                  console.error("Preview ref is null");
-                }
-              }}
-              onDownloadClick={() => {
-                if (previewRef.current) {
-                  setIsDownloading(true);
-                } else {
-                  console.error("Preview ref is null");
-                }
-              }}
-              isSharing={isSharing}
-              isDownloading={isDownloading}
-            />
-            
-            <CaptionSharingActions
-              previewRef={previewRef}
-              captions={captions}
-              selectedCaption={selectedCaption}
-              isEditing={isEditing}
-              isSharing={isSharing}
-              setIsSharing={setIsSharing}
-              isDownloading={isDownloading}
-              setIsDownloading={setIsDownloading}
-              selectedPlatform={selectedPlatform}
-              previewUrl={previewUrl}
-              mediaType={mediaType}
-              captionOverlayMode={captionOverlayMode}
-            />
-          </div>
-        </div>
-      </div>
+      <CaptionContent
+        selectedMedia={selectedMedia}
+        previewUrl={previewUrl}
+        captions={captions}
+        selectedCaption={selectedCaption}
+        setSelectedCaption={setSelectedCaption}
+        setCaptions={setCaptions}
+        isTextOnly={isTextOnly}
+        captionOverlayMode={captionOverlayMode}
+        onCaptionOverlayModeChange={onCaptionOverlayModeChange}
+        selectedPlatform={selectedPlatform}
+      />
     </div>
   );
 };
