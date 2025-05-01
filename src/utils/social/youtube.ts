@@ -1,6 +1,8 @@
 
 import { toast } from "sonner";
 import { SharingOptions, ShareResult } from "./types";
+import { shareViaBrowser } from "./browserSharing";
+import { handleApiError } from "./apiHelpers";
 
 export const shareToYouTube = async (options: SharingOptions): Promise<ShareResult> => {
   try {
@@ -13,6 +15,16 @@ export const shareToYouTube = async (options: SharingOptions): Promise<ShareResu
       };
     }
     
+    // First try browser sharing as a user-friendly option
+    try {
+      const browserShareResult = await shareViaBrowser(options);
+      if (browserShareResult.success) {
+        return browserShareResult;
+      }
+    } catch (browserShareError) {
+      console.warn('Browser sharing failed, falling back to YouTube web:', browserShareError);
+    }
+    
     // YouTube doesn't have a standard web share URL for uploading
     // Direct users to YouTube Studio
     toast.info('Opening YouTube Studio. Please upload your video there.');
@@ -23,10 +35,11 @@ export const shareToYouTube = async (options: SharingOptions): Promise<ShareResu
       message: 'YouTube Studio opened for upload' 
     };
   } catch (error) {
-    console.error('YouTube sharing error:', error);
+    const errorDetails = handleApiError(error, 'YouTube');
+    
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Unknown YouTube sharing error' 
+      error: errorDetails.message || 'Unknown YouTube sharing error' 
     };
   }
 };

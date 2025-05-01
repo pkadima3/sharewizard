@@ -12,3 +12,17 @@ export interface ShareResult {
   message?: string;
   error?: string;
 }
+
+export interface ApiErrorDetails {
+  code?: string;
+  message?: string;
+  isNetworkError?: boolean;
+  isCorsError?: boolean;
+}
+
+export interface SocialApiConfig {
+  retryCount?: number;
+  maxRetries?: number;
+  timeout?: number;
+  corsErrorHandling?: 'fallback' | 'error';
+}
