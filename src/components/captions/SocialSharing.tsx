@@ -3,7 +3,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Share, Instagram, Facebook, Twitter, Linkedin, Youtube, Music } from 'lucide-react';
 import { toast } from "sonner";
-import { shareToPlatform } from '@/utils/socialMediaUtils';
+import { shareToPlatform } from '@/utils/social';
 import { MediaType } from '@/types/mediaTypes';
 
 interface SocialSharingProps {
