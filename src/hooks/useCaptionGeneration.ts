@@ -51,6 +51,14 @@ export const useCaptionGeneration = ({
         return;
       }
       
+      console.log("Attempting to fetch captions with params:", {
+        platform: selectedPlatform,
+        tone: selectedTone,
+        niche: selectedNiche,
+        goal: selectedGoal,
+        postIdea
+      });
+      
       // Generate captions using our improved service
       const captionResponse = await generateCaptions(
         selectedPlatform,
@@ -65,7 +73,8 @@ export const useCaptionGeneration = ({
       }
       
       // Check if we're using fallback demo content
-      if (captionResponse.error === "FALLBACK_MODE") {
+      if (captionResponse.error) {
+        console.log("Using fallback content due to:", captionResponse.error);
         setIsFallbackMode(true);
       }
       
@@ -86,7 +95,9 @@ export const useCaptionGeneration = ({
         err?.code === 'unavailable' || 
         err?.code === 'internal' ||
         err?.message?.includes('CORS') ||
-        err?.message?.includes('network');
+        err?.message?.includes('network') || 
+        err?.message?.includes('timeout') ||
+        err?.message?.includes('ERR_BLOCKED_BY_CLIENT');
       
       if (retryCount < MAX_RETRIES && isRetryableError) {
         // Increment retry count
@@ -103,6 +114,12 @@ export const useCaptionGeneration = ({
       } else {
         // We've exhausted retries or hit a non-retriable error
         setError(err?.message || "An unexpected error occurred");
+        
+        // Check specifically for browser extension issues
+        if (err?.message?.includes('ERR_BLOCKED_BY_CLIENT') || 
+            err?.message?.includes('could not be cloned')) {
+          setError("Your browser or extensions may be blocking API requests. Try disabling ad blockers or using a different browser.");
+        }
       }
     } finally {
       setIsGenerating(false);

@@ -39,6 +39,18 @@ const DEMO_CAPTIONS: GeneratedCaption[] = [
 ];
 
 /**
+ * Detects if the error is likely caused by an ad blocker or browser extension
+ */
+const isLikelyAdBlockerError = (error: any): boolean => {
+  const errorMessage = error?.message?.toLowerCase() || '';
+  return (
+    errorMessage.includes('err_blocked_by_client') || 
+    errorMessage.includes('blocked by an extension') ||
+    errorMessage.includes('could not be cloned')
+  );
+};
+
+/**
  * Calls the Firebase function to generate captions with robust error handling
  * Implements region fallback, CORS workarounds, and demo content fallback
  * 
@@ -84,7 +96,7 @@ export const generateCaptions = async (
         
         // Set a timeout to prevent long hanging requests
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Request timed out")), 15000);
+          setTimeout(() => reject(new Error(`Request to ${region} timed out`)), 12000);
         });
         
         // Race between the actual API call and the timeout
@@ -99,17 +111,29 @@ export const generateCaptions = async (
         // Validate response data
         const data = (result as any).data as CaptionResponse;
         if (!data || !data.captions || data.captions.length === 0) {
-          throw new Error("Invalid or empty response from server");
+          throw new Error(`Invalid or empty response from ${region}`);
         }
         
-        // Transform tags string to hashtags array if needed
+        // Process captions - ensure hashtags are in the right format
         const processedCaptions = data.captions.map(caption => {
           // Handle legacy API response format (tags as string)
-          if ('tags' in caption && !Array.isArray(caption.hashtags)) {
+          if ('tags' in caption && typeof caption.hashtags === 'undefined') {
             const tags = (caption as any).tags || '';
+            const hashtagsArray = typeof tags === 'string' 
+              ? tags.split(/\s+/).filter((tag: string) => tag.trim() !== '') 
+              : [];
+            
             return {
               ...caption,
-              hashtags: tags.split(/\s+/).filter((tag: string) => tag.trim() !== '')
+              hashtags: hashtagsArray
+            };
+          }
+          // Handle case where hashtags might be a string instead of an array
+          if (caption.hashtags && !Array.isArray(caption.hashtags)) {
+            const hashtagsStr = String(caption.hashtags);
+            return {
+              ...caption,
+              hashtags: hashtagsStr.split(/\s+/).filter(tag => tag.trim() !== '')
             };
           }
           return caption;
@@ -131,12 +155,24 @@ export const generateCaptions = async (
     // If we're here, all regions failed
     console.error("All Firebase function regions failed:", lastError);
     
+    // Check if this is likely an ad-blocker issue
+    if (isLikelyAdBlockerError(lastError)) {
+      toast.warning("It appears a browser extension or ad-blocker might be interfering with API requests. Try disabling extensions or using a different browser.");
+      console.log("Detected possible ad-blocker interference");
+      
+      return {
+        captions: DEMO_CAPTIONS,
+        requests_remaining: 999,
+        error: "POSSIBLE_ADBLOCKER_INTERFERENCE",
+        message: "Using demo captions. Consider disabling ad-blockers or browser extensions."
+      };
+    }
+    
     // Check if we hit CORS issues and provide fallback content
     if (lastError?.message?.includes("CORS") || 
         lastError?.code === "functions/unavailable" || 
         lastError?.code === "functions/internal" ||
-        lastError?.message?.includes("blocked by CORS policy") ||
-        lastError?.message?.includes("timed out")) {
+        lastError?.message?.includes("blocked by CORS policy")) {
       
       console.log("Using fallback demo captions due to API connectivity issues");
       toast.warning("Showing sample captions due to network connectivity issues. Your customized captions will be available soon.");
@@ -145,6 +181,7 @@ export const generateCaptions = async (
       return {
         captions: DEMO_CAPTIONS,
         requests_remaining: 999,
+        error: "CORS_ERROR",
         message: "Using demo captions. Network connectivity issues detected."
       };
     }

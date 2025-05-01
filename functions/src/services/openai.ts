@@ -29,28 +29,30 @@ export const generateCaptions = onCall({
     'localhost:5173',
     'localhost:5174',
     
+    // Production domains - explicitly listed
+    'engageperfect.com',
+    'www.engageperfect.com',
+    
     // Firebase hosting domains
     /engperfecthlc\.web\.app$/,
     /engperfecthlc\.firebaseapp\.com$/,
     
-    // Production domain
-    /engageperfect\.com$/,
-    /www\.engageperfect\.com$/,
-    
-    // Lovable preview domains
-    /preview--.*\.lovable\.app$/,
+    // Lovable preview domains - with broad pattern matching
     /.*\.lovable\.app$/,
+    /preview.*\.lovable\.app$/,
     /.*\.lovableproject\.com$/,
     
-    // Allow all origins while debugging CORS issues
+    // Additional fallback for other origins during development
     '*'
   ],
   maxInstances: 10,
   timeoutSeconds: 60,
-  memory: '256MiB'
+  memory: '256MiB',
+  region: 'us-central1' // Primary region for deployment
 }, async (request) => {
   // Log the origin for debugging
-  console.log('Request origin:', request.rawRequest?.headers?.origin || 'Unknown origin');
+  const origin = request.rawRequest?.headers?.origin || 'Unknown origin';
+  console.log(`Request origin: ${origin}`);
   
   try {
     const { tone, platform, niche, goal, postIdea } = request.data;
@@ -87,8 +89,12 @@ export const generateCaptions = onCall({
       - hashtags: Array of 5 relevant hashtags (without # symbol)
     `;
     
-    // Make the API call
-    const completion = await openai.chat.completions.create({
+    // Make the API call with timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("OpenAI API request timed out")), 25000);
+    });
+    
+    const completionPromise = openai.chat.completions.create({
       model: "gpt-4o",  // Using gpt-4o for better results
       messages: [
         { role: "system", content: systemPrompt },
@@ -98,6 +104,12 @@ export const generateCaptions = onCall({
       max_tokens: 800,
       response_format: { type: "json_object" }
     });
+    
+    // Race between API call and timeout
+    const completion = await Promise.race([
+      completionPromise,
+      timeoutPromise
+    ]) as any;
 
     console.log('OpenAI API response received');
     

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from "@/components/ui/button";
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Shield } from 'lucide-react';
 import { toast } from "sonner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
@@ -19,8 +19,13 @@ const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
     onTryAgainClick();
   };
 
-  // Check if the error is CORS related
-  const isCorsError = error.toLowerCase().includes('cors') || error.toLowerCase().includes('connection');
+  // Check what type of error we're dealing with
+  const isCorsError = error.toLowerCase().includes('cors') || 
+                     error.toLowerCase().includes('connection');
+  
+  const isAdBlockerError = error.toLowerCase().includes('blocked_by_client') || 
+                          error.toLowerCase().includes('extension') ||
+                          error.toLowerCase().includes('could not be cloned');
 
   return (
     <div className="flex flex-col items-center justify-center p-8 text-center">
@@ -33,9 +38,21 @@ const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
       {isCorsError && (
         <Alert variant="destructive" className="mb-4 max-w-md">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Connection Error</AlertTitle>
+          <AlertTitle>CORS Connection Error</AlertTitle>
           <AlertDescription>
-            This often happens due to browser security settings. Try using a different browser or refreshing the page.
+            This is likely a temporary issue with our API connection. We're working to fix it. 
+            Try refreshing the page or using a different browser in the meantime.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {isAdBlockerError && (
+        <Alert variant="destructive" className="mb-4 max-w-md">
+          <Shield className="h-4 w-4" />
+          <AlertTitle>Browser Extension Interference</AlertTitle>
+          <AlertDescription>
+            It appears that an ad blocker or browser extension is blocking our API requests. 
+            Try temporarily disabling extensions or using a private/incognito window.
           </AlertDescription>
         </Alert>
       )}
