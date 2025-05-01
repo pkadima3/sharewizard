@@ -28,20 +28,19 @@ export const useCaptionGeneration = ({
   const [error, setError] = useState<string | null>(null);
   const [requestsRemaining, setRequestsRemaining] = useState<number | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isFallbackMode, setIsFallbackMode] = useState(false);
   const { checkRequestAvailability } = useAuth();
 
   // Maximum number of automatic retries
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 2;
   
-  // Exponential backoff delay calculation
-  const getRetryDelay = (attempt: number) => Math.min(1000 * Math.pow(2, attempt), 10000);
-
   // Function to handle caption generation with retry logic
-  const fetchCaptionsWithRetry = useCallback(async () => {
+  const fetchCaptions = useCallback(async () => {
     if (!isGenerating) return;
     
     try {
       setError(null);
+      setIsFallbackMode(false);
       
       // Check if user has available requests
       const availability = await checkRequestAvailability();
@@ -51,82 +50,59 @@ export const useCaptionGeneration = ({
         setError(availability.message);
         return;
       }
-
-      // Reset retry count at the beginning of a new generation attempt
-      setRetryCount(0);
       
-      // Try to generate captions with built-in retry mechanism
-      let captionResponse = null;
-      let currentRetry = 0;
+      // Generate captions using our improved service
+      const captionResponse = await generateCaptions(
+        selectedPlatform,
+        selectedTone,
+        selectedNiche,
+        selectedGoal,
+        postIdea
+      );
       
-      while (currentRetry <= MAX_RETRIES && !captionResponse) {
-        if (currentRetry > 0) {
-          // Only show toast for retry attempts after the first one
-          const delay = getRetryDelay(currentRetry);
-          toast.info(`Retrying caption generation (attempt ${currentRetry + 1}/${MAX_RETRIES + 1})...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-        try {
-          console.log(`Caption generation attempt ${currentRetry + 1} of ${MAX_RETRIES + 1}`);
-          
-          captionResponse = await generateCaptions(
-            selectedPlatform,
-            selectedTone,
-            selectedNiche,
-            selectedGoal,
-            postIdea
-          );
-          
-          if (!captionResponse) {
-            throw new Error("Empty response received");
-          }
-        } catch (err: any) {
-          console.error(`Attempt ${currentRetry + 1} failed:`, err);
-          
-          // Check if this is an error we should retry
-          const isRetryableError = 
-            err?.code === 'unavailable' || 
-            err?.code === 'internal' ||
-            err?.message?.includes('CORS') ||
-            err?.message?.includes('network');
-          
-          currentRetry++;
-          
-          // If we've exhausted our retries or this isn't a retryable error, throw
-          if (currentRetry > MAX_RETRIES || !isRetryableError) {
-            throw err;
-          }
-          
-          // Update the retry count state for UI feedback
-          setRetryCount(currentRetry);
-        }
+      if (!captionResponse) {
+        throw new Error("Failed to generate captions");
       }
-
-      if (captionResponse && captionResponse.captions) {
-        setCaptions(captionResponse.captions);
-        setSelectedCaption(0);
-        setRequestsRemaining(captionResponse.requests_remaining);
-        console.log("Captions generated successfully:", captionResponse);
+      
+      // Check if we're using fallback demo content
+      if (captionResponse.error === "FALLBACK_MODE") {
+        setIsFallbackMode(true);
+      }
+      
+      setCaptions(captionResponse.captions);
+      setSelectedCaption(0);
+      setRequestsRemaining(captionResponse.requests_remaining);
+      
+      // Only show success toast if we're not in fallback mode
+      if (!captionResponse.error) {
         toast.success("Captions generated successfully!");
-      } else {
-        setError("Failed to generate captions. Please try again.");
-        console.error("Error fetching captions - empty response");
       }
-    } catch (err: any) {
-      console.error("Error fetching captions after retries:", err);
       
-      // Provide more specific error messages for different error types
-      if (err?.message?.includes('CORS') || err?.message?.includes('blocked by CORS policy')) {
-        setError("Server connection issue. This is often temporary. Please try again or contact support with reference: CORS-ERROR");
-      } else if (err?.code === 'unauthenticated') {
-        setError("Authentication required. Please log in again.");
-      } else if (err?.code === 'resource-exhausted') {
-        setError("You've reached your plan limit. Please upgrade to continue.");
-      } else if (err?.code === 'internal') {
-        setError("Our servers encountered an issue. Please try again later.");
+    } catch (err: any) {
+      console.error("Error in caption generation hook:", err);
+      
+      // Determine if this error type is retriable
+      const isRetryableError = 
+        err?.code === 'unavailable' || 
+        err?.code === 'internal' ||
+        err?.message?.includes('CORS') ||
+        err?.message?.includes('network');
+      
+      if (retryCount < MAX_RETRIES && isRetryableError) {
+        // Increment retry count
+        setRetryCount(prev => prev + 1);
+        
+        // Wait with exponential backoff before retrying
+        const backoffDelay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+        toast.info(`Connection issue detected. Retrying in ${backoffDelay/1000}s...`);
+        
+        setTimeout(() => {
+          // Try again
+          setIsGenerating(true);
+        }, backoffDelay);
       } else {
-        setError("An unexpected error occurred. Please try again.");
+        // We've exhausted retries or hit a non-retriable error
+        setError(err?.message || "An unexpected error occurred");
       }
     } finally {
       setIsGenerating(false);
@@ -138,16 +114,21 @@ export const useCaptionGeneration = ({
     selectedNiche, 
     selectedGoal, 
     postIdea, 
+    retryCount,
     setIsGenerating, 
     checkRequestAvailability
   ]);
 
+  // Call the fetch function when isGenerating changes to true
   useEffect(() => {
-    fetchCaptionsWithRetry();
-  }, [fetchCaptionsWithRetry]);
+    if (isGenerating) {
+      fetchCaptions();
+    }
+  }, [isGenerating, fetchCaptions]);
 
   // Provide a manual retry function that users can call
   const retryGeneration = () => {
+    setRetryCount(0);
     setIsGenerating(true);
   };
 
@@ -160,6 +141,7 @@ export const useCaptionGeneration = ({
     setError,
     requestsRemaining,
     retryCount,
-    retryGeneration
+    retryGeneration,
+    isFallbackMode
   };
 };
