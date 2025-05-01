@@ -40,7 +40,7 @@ const DEMO_CAPTIONS: GeneratedCaption[] = [
 
 /**
  * Calls the Firebase function to generate captions with robust error handling
- * Implements region fallback, CORS workarounds, and demo content fallback
+ * Implements region fallback, CORS workarounds, timeouts and demo content fallback
  * 
  * @param platform - Target social media platform
  * @param tone - Desired tone for the captions
@@ -79,7 +79,11 @@ export const generateCaptions = async (
         const functions = getFunctions(undefined, region);
         const generateCaptionsFunction = httpsCallable<typeof functionData, CaptionResponse>(
           functions, 
-          'generateCaptions'
+          'generateCaptions',
+          // Add explicit CORS settings to the callable
+          { 
+            timeout: 15000 // 15 second timeout
+          }
         );
         
         // Set a timeout to prevent long hanging requests
@@ -102,7 +106,7 @@ export const generateCaptions = async (
           throw new Error("Invalid or empty response from server");
         }
         
-        // Transform tags string to hashtags array if needed
+        // Process captions to ensure consistent format
         const processedCaptions = data.captions.map(caption => {
           // Handle legacy API response format (tags as string)
           if ('tags' in caption && !Array.isArray(caption.hashtags)) {

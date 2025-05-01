@@ -22,7 +22,7 @@ export interface GeneratedCaption {
 }
 
 export const generateCaptions = onCall({
-  // Set comprehensive CORS configuration with proper validation
+  // Enhanced CORS configuration with Lovable preview domains
   cors: [
     // Local development
     'localhost:3000',
@@ -37,7 +37,8 @@ export const generateCaptions = onCall({
     /engageperfect\.com$/,
     /www\.engageperfect\.com$/,
     
-    // Lovable preview domains
+    // Lovable preview domains (added specific preview domain)
+    /preview-sharewizard\.lovable\.app$/,
     /preview--.*\.lovable\.app$/,
     /.*\.lovable\.app$/,
     /.*\.lovableproject\.com$/,
