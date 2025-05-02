@@ -1,6 +1,6 @@
-
 import { toast } from "sonner";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { callGenerateCaptions, GenerateCaptionsParams } from "./generateCaptionsService";
+import { shouldUseEmulator } from "@/utils/environment";
 
 export interface GeneratedCaption {
   title: string;
@@ -71,12 +71,8 @@ export const generateCaptions = async (
   try {
     console.log("Generating captions with parameters:", { platform, tone, niche, goal, postIdea });
     
-    // Try multiple regions to avoid CORS issues
-    const regions = ['us-central1', 'us-east1', 'europe-west1'];
-    let lastError: any = null;
-    
     // Prepare data for the function call
-    const functionData = {
+    const functionData: GenerateCaptionsParams = {
       tone,
       platform,
       niche,
@@ -84,79 +80,70 @@ export const generateCaptions = async (
       postIdea: postIdea || niche  // Use postIdea if provided, otherwise fall back to niche
     };
     
-    // Try each region until one works
-    for (const region of regions) {
-      try {
-        console.log(`Trying Firebase function in ${region} region...`);
-        const functions = getFunctions(undefined, region);
-        const generateCaptionsFunction = httpsCallable<typeof functionData, CaptionResponse>(
-          functions, 
-          'generateCaptions'
-        );
-        
-        // Set a timeout to prevent long hanging requests
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Request to ${region} timed out`)), 12000);
-        });
-        
-        // Race between the actual API call and the timeout
-        const result = await Promise.race([
-          generateCaptionsFunction(functionData),
-          timeoutPromise
-        ]);
-        
-        // If we reach here, the call succeeded
-        console.log(`Success with ${region} region!`, result);
-        
-        // Validate response data
-        const data = (result as any).data as CaptionResponse;
-        if (!data || !data.captions || data.captions.length === 0) {
-          throw new Error(`Invalid or empty response from ${region}`);
-        }
-        
-        // Process captions - ensure hashtags are in the right format
-        const processedCaptions = data.captions.map(caption => {
-          // Handle legacy API response format (tags as string)
-          if ('tags' in caption && typeof caption.hashtags === 'undefined') {
-            const tags = (caption as any).tags || '';
-            const hashtagsArray = typeof tags === 'string' 
-              ? tags.split(/\s+/).filter((tag: string) => tag.trim() !== '') 
-              : [];
-            
-            return {
-              ...caption,
-              hashtags: hashtagsArray
-            };
-          }
-          // Handle case where hashtags might be a string instead of an array
-          if (caption.hashtags && !Array.isArray(caption.hashtags)) {
-            const hashtagsStr = String(caption.hashtags);
-            return {
-              ...caption,
-              hashtags: hashtagsStr.split(/\s+/).filter(tag => tag.trim() !== '')
-            };
-          }
-          return caption;
-        });
-        
-        toast.success("Captions generated successfully!");
-        
-        return {
-          captions: processedCaptions as GeneratedCaption[],
-          requests_remaining: data.requests_remaining
-        };
-      } catch (err) {
-        console.log(`Failed with ${region} region:`, err);
-        lastError = err;
-        // Continue to the next region
+    try {
+      // Use the new service to call the Cloud Function
+      // Determine if we should use the emulator
+      const useEmulator = shouldUseEmulator();
+      if (useEmulator) {
+        console.log("Using Firebase emulator for caption generation");
       }
+      
+      const result = await callGenerateCaptions(functionData, useEmulator);
+      
+      // Validate response data
+      if (!result || !result.captions || result.captions.length === 0) {
+        throw new Error("Invalid or empty response");
+      }
+      
+      // Process captions - ensure hashtags are in the right format
+      const processedCaptions = result.captions.map(caption => {
+        // Handle legacy API response format (tags as string)
+        if ('tags' in caption && typeof caption.hashtags === 'undefined') {
+          const tags = (caption as any).tags || '';
+          const hashtagsArray = typeof tags === 'string' 
+            ? tags.split(/\s+/).filter((tag: string) => tag.trim() !== '') 
+            : [];
+          
+          return {
+            ...caption,
+            hashtags: hashtagsArray
+          };
+        }
+        // Handle case where hashtags might be a string instead of an array
+        if (caption.hashtags && !Array.isArray(caption.hashtags)) {
+          const hashtagsStr = String(caption.hashtags);
+          return {
+            ...caption,
+            hashtags: hashtagsStr.split(/\s+/).filter(tag => tag.trim() !== '')
+          };
+        }
+        return caption;
+      });
+      
+      toast.success("Captions generated successfully!");
+      
+      return {
+        captions: processedCaptions as GeneratedCaption[],
+        requests_remaining: result.requests_remaining
+      };
+      
+    } catch (err) {
+      console.log("Error calling generateCaptions:", err);
+      throw err; // Re-throw to be handled by the outer try-catch
     }
+  } catch (error: any) {
+    console.error("Error generating captions:", error);
     
-    // If we're here, all regions failed
-    console.error("All Firebase function regions failed:", lastError);
+    // Enhanced error logging
+    console.error("Error details:", {
+      code: error?.code,
+      message: error?.message,
+      details: error?.details,
+      stack: error?.stack
+    });
     
     // Check if this is likely an ad-blocker issue
-    if (isLikelyAdBlockerError(lastError)) {
+    if (isLikelyAdBlockerError(error)) {
       toast.warning("It appears a browser extension or ad-blocker might be interfering with API requests. Try disabling extensions or using a different browser.");
       console.log("Detected possible ad-blocker interference");
       
@@ -169,10 +156,10 @@ export const generateCaptions = async (
     }
     
     // Check if we hit CORS issues and provide fallback content
-    if (lastError?.message?.includes("CORS") || 
-        lastError?.code === "functions/unavailable" || 
-        lastError?.code === "functions/internal" ||
-        lastError?.message?.includes("blocked by CORS policy")) {
+    if (error?.message?.includes("CORS") || 
+        error?.code === "functions/unavailable" || 
+        error?.code === "functions/internal" ||
+        error?.message?.includes("blocked by CORS policy")) {
       
       console.log("Using fallback demo captions due to API connectivity issues");
       toast.warning("Showing sample captions due to network connectivity issues. Your customized captions will be available soon.");
@@ -185,20 +172,6 @@ export const generateCaptions = async (
         message: "Using demo captions. Network connectivity issues detected."
       };
     }
-    
-    // Default error handler
-    throw lastError || new Error("Unknown error occurred");
-    
-  } catch (error: any) {
-    console.error("Error generating captions:", error);
-    
-    // Enhanced error logging
-    console.error("Error details:", {
-      code: error?.code,
-      message: error?.message,
-      details: error?.details,
-      stack: error?.stack
-    });
     
     // User-facing error messages based on error type
     if (error?.code === 'unauthenticated') {
