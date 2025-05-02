@@ -81,14 +81,8 @@ export const generateCaptions = async (
     };
     
     try {
-      // Use the new service to call the Cloud Function
-      // Determine if we should use the emulator
-      const useEmulator = shouldUseEmulator();
-      if (useEmulator) {
-        console.log("Using Firebase emulator for caption generation");
-      }
-      
-      const result = await callGenerateCaptions(functionData, useEmulator);
+      // Call the Cloud Function using our new service
+      const result = await callGenerateCaptions(functionData);
       
       // Validate response data
       if (!result || !result.captions || result.captions.length === 0) {
