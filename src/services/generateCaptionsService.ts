@@ -3,7 +3,6 @@ import { getFunctions, httpsCallable, HttpsCallableResult } from "firebase/funct
 import { toast } from "sonner";
 import { auth } from "@/lib/firebase";
 import { shouldUseEmulator, getEnvironmentName } from "@/utils/environment";
-import { GeneratedCaption } from "./openaiService";
 
 // Define the parameters interface
 export interface GenerateCaptionsParams {
@@ -12,6 +11,14 @@ export interface GenerateCaptionsParams {
   tone: string;
   niche: string;
   postIdea?: string;
+}
+
+// Define the caption interface
+export interface GeneratedCaption {
+  title: string;
+  caption: string;
+  cta: string;
+  hashtags: string[];
 }
 
 // Define the response interface
@@ -48,8 +55,8 @@ export async function callGenerateCaptions(
     // If using emulator, connect to the local emulator
     if (useEmulator) {
       console.log("🔧 Using Firebase Emulator for generateCaptions");
-      // Set the emulator URL for the functions
-      // No need to use fetch - we use the SDK with emulator config
+      // Connect to the emulator - no need to use fetch directly
+      // The Firebase SDK will handle this for us
     }
     
     // Create the callable function
