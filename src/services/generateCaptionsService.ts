@@ -1,3 +1,4 @@
+
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "sonner";
 import { shouldUseEmulator, isPreview } from "@/utils/environment";

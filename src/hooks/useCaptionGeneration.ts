@@ -1,8 +1,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { GeneratedCaption, CaptionResponse, generateCaptions } from '@/services/openaiService';
+import { generateCaptions, Caption, GenerateCaptionsParams, GenerateCaptionsResponse } from '@/services/generateCaptionsService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from "sonner";
+
+// Define types for captions
+export interface GeneratedCaption {
+  title: string;
+  caption: string;
+  cta: string;
+  tags: string;
+}
 
 interface UseCaptionGenerationProps {
   selectedNiche: string;
@@ -21,7 +29,7 @@ export const useCaptionGeneration = ({
   selectedTone,
   isGenerating,
   setIsGenerating,
-  postIdea
+  postIdea = ""
 }: UseCaptionGenerationProps) => {
   const [captions, setCaptions] = useState<GeneratedCaption[]>([]);
   const [selectedCaption, setSelectedCaption] = useState<number>(0);
@@ -59,41 +67,39 @@ export const useCaptionGeneration = ({
         postIdea
       });
       
-      // Generate captions using our improved service
-      const captionResponse = await generateCaptions(
-        selectedPlatform,
-        selectedTone,
-        selectedNiche,
-        selectedGoal,
-        postIdea
-      );
+      // Generate captions using our service
+      const params: GenerateCaptionsParams = {
+        platform: selectedPlatform,
+        tone: selectedTone,
+        niche: selectedNiche,
+        goal: selectedGoal,
+        postIdea: postIdea || ""
+      };
+      
+      const captionResponse = await generateCaptions(params);
       
       if (!captionResponse) {
         throw new Error("Failed to generate captions");
       }
       
-      // Check if we're using fallback demo content
-      if (captionResponse.error) {
-        console.log("Using fallback content due to:", captionResponse.error);
-        setIsFallbackMode(true);
-      }
+      // Map the response to our component's expected format
+      setCaptions(captionResponse.captions.map(c => ({
+        title: c.title,
+        caption: c.caption,
+        cta: c.cta,
+        tags: c.tags
+      })));
       
-      setCaptions(captionResponse.captions);
       setSelectedCaption(0);
       setRequestsRemaining(captionResponse.requests_remaining);
-      
-      // Only show success toast if we're not in fallback mode
-      if (!captionResponse.error) {
-        toast.success("Captions generated successfully!");
-      }
       
     } catch (err: any) {
       console.error("Error in caption generation hook:", err);
       
       // Determine if this error type is retriable
       const isRetryableError = 
-        err?.code === 'unavailable' || 
-        err?.code === 'internal' ||
+        err?.code === 'functions/unavailable' || 
+        err?.code === 'functions/internal' ||
         err?.message?.includes('CORS') ||
         err?.message?.includes('network') || 
         err?.message?.includes('timeout') ||
