@@ -19,7 +19,7 @@ interface GeneratedCaptionsProps {
   isTextOnly?: boolean;
   captionOverlayMode?: 'overlay' | 'below';
   onCaptionOverlayModeChange?: (mode: 'overlay' | 'below') => void;
-  postIdea?: string;
+  postIdea: string; // Changed from optional to required
 }
 
 const GeneratedCaptions: React.FC<GeneratedCaptionsProps> = ({

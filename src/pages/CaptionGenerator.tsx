@@ -16,7 +16,8 @@ const CaptionGenerator: React.FC = () => {
     selectedPlatform: '',
     selectedGoal: '',
     selectedTone: '',
-    captionOverlayMode: 'below'
+    captionOverlayMode: 'below',
+    postIdea: '' // Initialize post idea
   });
 
   // Clean up object URLs when component unmounts
@@ -34,7 +35,7 @@ const CaptionGenerator: React.FC = () => {
   };
 
   const handleNext = () => {
-    if (currentStep < 5) {
+    if (currentStep < 6) { // Increased max step since we added a new step
       setCurrentStep(prev => prev + 1);
     }
   };
