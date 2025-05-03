@@ -1,8 +1,9 @@
 
-import { getFunctions, httpsCallable, HttpsCallableResult, connectFunctionsEmulator } from "firebase/functions";
+import { getFunctions, httpsCallable, HttpsCallableResult } from "firebase/functions";
 import { toast } from "sonner";
 import { auth } from "@/lib/firebase";
 import { shouldUseEmulator, getEnvironmentName } from "@/utils/environment";
+import { GeneratedCaption } from "./openaiService";
 
 // Define the parameters interface
 export interface GenerateCaptionsParams {
@@ -11,14 +12,6 @@ export interface GenerateCaptionsParams {
   tone: string;
   niche: string;
   postIdea?: string;
-}
-
-// Define the caption interface
-export interface GeneratedCaption {
-  title: string;
-  caption: string;
-  cta: string;
-  hashtags: string[];
 }
 
 // Define the response interface
@@ -55,8 +48,8 @@ export async function callGenerateCaptions(
     // If using emulator, connect to the local emulator
     if (useEmulator) {
       console.log("🔧 Using Firebase Emulator for generateCaptions");
-      // Connect to the functions emulator
-      connectFunctionsEmulator(functions, 'localhost', 5001);
+      // Set the emulator URL for the functions
+      // No need to use fetch - we use the SDK with emulator config
     }
     
     // Create the callable function
@@ -78,21 +71,18 @@ export async function callGenerateCaptions(
     // Handle specific Firebase error codes
     if (err.code) {
       switch(err.code) {
-        case 'functions/unauthenticated':
-        case 'functions/permission-denied':
+        case 'unauthenticated':
+        case 'permission-denied':
           toast.error("You must be logged in to generate captions.");
           break;
-        case 'functions/resource-exhausted':
+        case 'resource-exhausted':
           toast.error("You've reached your plan limit. Please upgrade to continue.");
           break;
-        case 'functions/unavailable':
+        case 'unavailable':
           toast.error("Service temporarily unavailable. Please try again later.");
           break;
-        case 'functions/internal':
+        case 'internal':
           toast.error("An error occurred while generating captions. Please try again.");
-          break;
-        case 'functions/cancelled':
-          toast.error("Request was cancelled. Please try again.");
           break;
         default:
           toast.error(`Error: ${err.message || 'Unknown error occurred'}`);
