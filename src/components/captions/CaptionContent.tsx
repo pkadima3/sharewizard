@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import { GeneratedCaption } from '@/services/openaiService';
+import { GeneratedCaption } from '@/types/captionTypes';
 import CaptionsList from './CaptionsList';
 import CaptionEditor from './CaptionEditor';
 import CaptionSharingActions from './CaptionSharingActions';

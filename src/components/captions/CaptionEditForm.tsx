@@ -1,10 +1,9 @@
-
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Check, X } from 'lucide-react';
-import { GeneratedCaption } from '@/services/openaiService';
+import { GeneratedCaption } from '@/types/captionTypes';
 
 interface CaptionEditFormProps {
   editingCaption: GeneratedCaption;

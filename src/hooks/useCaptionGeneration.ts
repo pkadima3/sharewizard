@@ -1,16 +1,8 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { generateCaptions, Caption, GenerateCaptionsParams, GenerateCaptionsResponse } from '@/services/generateCaptionsService';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from "sonner";
-
-// Define types for captions
-export interface GeneratedCaption {
-  title: string;
-  caption: string;
-  cta: string;
-  tags: string;
-}
+import { GeneratedCaption } from '@/types/captionTypes';
 
 interface UseCaptionGenerationProps {
   selectedNiche: string;
@@ -87,7 +79,7 @@ export const useCaptionGeneration = ({
         title: c.title,
         caption: c.caption,
         cta: c.cta,
-        tags: c.tags
+        hashtags: c.tags.split(' ').map(tag => tag.replace(/^#/, '').trim())
       })));
       
       setSelectedCaption(0);
