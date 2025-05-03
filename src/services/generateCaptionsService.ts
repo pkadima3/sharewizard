@@ -1,4 +1,3 @@
-
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "sonner";
 import { shouldUseEmulator, isPreview } from "@/utils/environment";
@@ -33,10 +32,20 @@ export interface GenerateCaptionsResponse {
  * @returns Promise with the function response
  */
 export async function generateCaptions(params: GenerateCaptionsParams): Promise<GenerateCaptionsResponse> {
+  // Show loading toast
+  const loadingToast = toast.loading("Generating captions...");
+  
   try {
     // Get the correct region based on environment
     const region = 'us-central1';
     console.log(`Calling Firebase function in region: ${region}`);
+    
+    // Validate parameters
+    const { tone, platform, postIdea, niche, goal } = params;
+    if (!tone || !platform || !postIdea || !niche || !goal) {
+      toast.dismiss(loadingToast);
+      throw new Error("Missing required fields. Please fill in all fields.");
+    }
     
     // Initialize Firebase functions
     const functions = getFunctions(undefined, region);
@@ -54,9 +63,18 @@ export async function generateCaptions(params: GenerateCaptionsParams): Promise<
     
     console.log("Function call successful, received data:", result.data);
     
+    // Dismiss loading toast
+    toast.dismiss(loadingToast);
+    
+    // Success toast
+    toast.success("Captions generated successfully!");
+    
     // Return the data
     return result.data;
   } catch (error: any) {
+    // Dismiss loading toast
+    toast.dismiss(loadingToast);
+    
     console.error("Error calling generateCaptions:", error);
     
     // Handle specific error codes
@@ -73,6 +91,9 @@ export async function generateCaptions(params: GenerateCaptionsParams): Promise<
           break;
         case 'functions/internal':
           toast.error("An error occurred while generating captions. Please try again.");
+          break;
+        case 'functions/cancelled':
+          toast.error("Request was cancelled. Please try again.");
           break;
         default:
           toast.error(`Error: ${error.message || 'Unknown error occurred'}`);
