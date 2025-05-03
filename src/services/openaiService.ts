@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { callGenerateCaptions, GenerateCaptionsParams } from "./generateCaptionsService";
+import { generateCaptions as callGenerateCaptions, GenerateCaptionsParams, Caption as FirebaseCaption } from "./generateCaptionsService";
 import { shouldUseEmulator } from "@/utils/environment";
 
 export interface GeneratedCaption {
@@ -80,80 +80,36 @@ export const generateCaptions = async (
       postIdea: postIdea || niche  // Use postIdea if provided, otherwise fall back to niche
     };
     
-    try {
-      // Call the Cloud Function using our new service
-      const result = await callGenerateCaptions(functionData);
-      
-      // Validate response data
-      if (!result || !result.captions || result.captions.length === 0) {
-        throw new Error("Invalid or empty response");
-      }
-      
-      // Process captions - ensure hashtags are in the right format
-      const processedCaptions = result.captions.map(caption => {
-        // Handle legacy API response format (tags as string)
-        if ('tags' in caption && typeof caption.hashtags === 'undefined') {
-          const tags = (caption as any).tags || '';
-          const hashtagsArray = typeof tags === 'string' 
-            ? tags.split(/\s+/).filter((tag: string) => tag.trim() !== '') 
-            : [];
-          
-          return {
-            ...caption,
-            hashtags: hashtagsArray
-          };
-        }
-        // Handle case where hashtags might be a string instead of an array
-        if (caption.hashtags && !Array.isArray(caption.hashtags)) {
-          const hashtagsStr = String(caption.hashtags);
-          return {
-            ...caption,
-            hashtags: hashtagsStr.split(/\s+/).filter(tag => tag.trim() !== '')
-          };
-        }
-        return caption;
-      });
-      
-      toast.success("Captions generated successfully!");
+    // Call the Cloud Function using our service
+    const result = await callGenerateCaptions(functionData);
+    
+    // Process captions - convert tags string to hashtags array
+    const processedCaptions: GeneratedCaption[] = result.captions.map(caption => {
+      const tagsStr = caption.tags || '';
+      const hashtagsArray = tagsStr.split(/\s+/).filter(tag => tag.trim() !== '');
       
       return {
-        captions: processedCaptions as GeneratedCaption[],
-        requests_remaining: result.requests_remaining
+        title: caption.title,
+        caption: caption.caption,
+        cta: caption.cta,
+        hashtags: hashtagsArray
       };
-      
-    } catch (err) {
-      console.log("Error calling generateCaptions:", err);
-      throw err; // Re-throw to be handled by the outer try-catch
-    }
+    });
+    
+    toast.success("Captions generated successfully!");
+    
+    return {
+      captions: processedCaptions,
+      requests_remaining: result.requests_remaining
+    };
+    
   } catch (error: any) {
     console.error("Error generating captions:", error);
     
-    // Enhanced error logging
-    console.error("Error details:", {
-      code: error?.code,
-      message: error?.message,
-      details: error?.details,
-      stack: error?.stack
-    });
-    
-    // Check if this is likely an ad-blocker issue
-    if (isLikelyAdBlockerError(error)) {
-      toast.warning("It appears a browser extension or ad-blocker might be interfering with API requests. Try disabling extensions or using a different browser.");
-      console.log("Detected possible ad-blocker interference");
-      
-      return {
-        captions: DEMO_CAPTIONS,
-        requests_remaining: 999,
-        error: "POSSIBLE_ADBLOCKER_INTERFERENCE",
-        message: "Using demo captions. Consider disabling ad-blockers or browser extensions."
-      };
-    }
-    
-    // Check if we hit CORS issues and provide fallback content
+    // Check if this is a CORS issue or other network error
     if (error?.message?.includes("CORS") || 
         error?.code === "functions/unavailable" || 
-        error?.code === "functions/internal" ||
-        error?.message?.includes("blocked by CORS policy")) {
+        error?.code === "functions/internal") {
       
       console.log("Using fallback demo captions due to API connectivity issues");
       toast.warning("Showing sample captions due to network connectivity issues. Your customized captions will be available soon.");
@@ -167,18 +123,7 @@ export const generateCaptions = async (
       };
     }
     
-    // User-facing error messages based on error type
-    if (error?.code === 'unauthenticated') {
-      toast.error("You must be logged in to generate captions.");
-    } else if (error?.code === 'resource-exhausted') {
-      toast.error("You've reached your plan limit. Please upgrade to continue.");
-    } else if (error?.message?.includes("CORS")) {
-      toast.warning("Network connectivity issue detected. Showing sample captions instead.");
-    } else {
-      toast.warning("Unable to connect to caption service. Showing sample content instead.");
-    }
-    
-    // Return demo captions as fallback
+    // Return demo captions as fallback for all errors
     return {
       captions: DEMO_CAPTIONS,
       requests_remaining: 999,

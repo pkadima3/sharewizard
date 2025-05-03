@@ -1,56 +1,40 @@
 
-import { getFunctions, httpsCallable, HttpsCallableResult } from "firebase/functions";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "sonner";
-import { auth } from "@/lib/firebase";
-import { shouldUseEmulator, getEnvironmentName } from "@/utils/environment";
-import { GeneratedCaption } from "./openaiService";
 
 // Define the parameters interface
 export interface GenerateCaptionsParams {
-  platform: string;
-  goal: string;
   tone: string;
+  platform: string;
+  postIdea: string;
   niche: string;
-  postIdea?: string;
+  goal: string;
+}
+
+// Define the caption interface
+export interface Caption {
+  title: string;
+  caption: string;
+  cta: string;
+  tags: string;
 }
 
 // Define the response interface
 export interface GenerateCaptionsResponse {
-  captions: GeneratedCaption[];
+  captions: Caption[];
   requests_remaining: number;
 }
 
 /**
- * Calls the Firebase Cloud Function generateCaptions
+ * Calls the Firebase Cloud Function to generate captions
  * 
- * @param params - Object with platform, goal, tone, niche, and optional postIdea
+ * @param params - Object with tone, platform, postIdea, niche, and goal
  * @returns Promise with the function response
  */
-export async function callGenerateCaptions(
-  params: GenerateCaptionsParams
-): Promise<GenerateCaptionsResponse> {
-  // Validate required parameters
-  const { platform, goal, tone, niche } = params;
-  if (!platform || !goal || !tone || !niche) {
-    throw new Error("Missing required parameters: platform, goal, tone, niche");
-  }
-  
-  // Check if we should use the emulator
-  const useEmulator = shouldUseEmulator();
-  const environment = getEnvironmentName();
-  
-  console.log(`[${environment.toUpperCase()}] Calling generateCaptions with params:`, params);
-  
+export async function generateCaptions(params: GenerateCaptionsParams): Promise<GenerateCaptionsResponse> {
   try {
-    // Initialize the functions SDK with region
+    // Initialize Firebase functions
     const functions = getFunctions(undefined, 'us-central1');
-    
-    // If using emulator, connect to the local emulator
-    if (useEmulator) {
-      console.log("🔧 Using Firebase Emulator for generateCaptions");
-      // Set the emulator URL for the functions
-      // No need to use fetch - we use the SDK with emulator config
-    }
     
     // Create the callable function
     const generateCaptionsFunction = httpsCallable<GenerateCaptionsParams, GenerateCaptionsResponse>(
@@ -59,39 +43,35 @@ export async function callGenerateCaptions(
     );
     
     // Call the function
-    const result: HttpsCallableResult<GenerateCaptionsResponse> = await generateCaptionsFunction(params);
+    const result = await generateCaptionsFunction(params);
     
     // Return the data
     return result.data;
+  } catch (error: any) {
+    console.error("Error calling generateCaptions:", error);
     
-  } catch (err: any) {
-    // Enhanced error logging
-    console.error(`[${environment.toUpperCase()}] Error calling generateCaptions:`, err);
-    
-    // Handle specific Firebase error codes
-    if (err.code) {
-      switch(err.code) {
-        case 'unauthenticated':
-        case 'permission-denied':
+    // Handle specific error codes
+    if (error.code) {
+      switch(error.code) {
+        case 'functions/unauthenticated':
           toast.error("You must be logged in to generate captions.");
           break;
-        case 'resource-exhausted':
+        case 'functions/resource-exhausted':
           toast.error("You've reached your plan limit. Please upgrade to continue.");
           break;
-        case 'unavailable':
+        case 'functions/unavailable':
           toast.error("Service temporarily unavailable. Please try again later.");
           break;
-        case 'internal':
+        case 'functions/internal':
           toast.error("An error occurred while generating captions. Please try again.");
           break;
         default:
-          toast.error(`Error: ${err.message || 'Unknown error occurred'}`);
+          toast.error(`Error: ${error.message || 'Unknown error occurred'}`);
       }
     } else {
-      // Generic error fallback
-      toast.error(`Error: ${err.message || 'Unknown error occurred'}`);
+      toast.error(`Error: ${error.message || 'Unknown error occurred'}`);
     }
     
-    throw err;
+    throw error;
   }
 }
