@@ -11,9 +11,14 @@ export const testOpenAIKey = onRequest({
   try {
     // Add specific CORS headers for debugging
     const allowedOrigins = [
+      // Lovable preview domains
+      'https://preview--sharewizard.lovable.app',
+      'https://lovable.dev',
+      // Local development
       'http://localhost:3000',
       'http://localhost:5173',
       'http://localhost:5174',
+      // Production domains
       'https://engageperfect.com',
       'https://www.engageperfect.com',
       'https://engperfecthlc.web.app',
@@ -26,6 +31,7 @@ export const testOpenAIKey = onRequest({
     if (allowedOrigins.includes(origin) || 
         origin.includes('lovable.app') ||
         origin.includes('lovableproject.com') ||
+        origin.includes('lovable.dev') ||
         req.headers.origin === '*') {
       
       res.setHeader('Access-Control-Allow-Origin', origin);

@@ -24,10 +24,13 @@ export interface GeneratedCaption {
 export const generateCaptions = onCall({
   // Set comprehensive CORS configuration with proper validation
   cors: [
+    // Lovable preview domains
+    'https://preview--sharewizard.lovable.app/caption-generator',
+    'https://lovable.dev/projects/94ab2c59-8218-46db-b65e-b3ea4e02a86c',
+    
     // Local development
-    'localhost:3000',
-    'localhost:5173',
-    'localhost:5174',
+    'http://localhost:5173',
+    'http://localhost:5174',
     
     // Production domains - explicitly listed
     'engageperfect.com',
@@ -41,6 +44,7 @@ export const generateCaptions = onCall({
     /.*\.lovable\.app$/,
     /preview.*\.lovable\.app$/,
     /.*\.lovableproject\.com$/,
+    /.*\.lovable\.dev$/,
     
     // Additional fallback for other origins during development
     '*'

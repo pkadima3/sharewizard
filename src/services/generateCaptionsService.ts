@@ -1,6 +1,7 @@
 
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { toast } from "sonner";
+import { shouldUseEmulator, isPreview } from "@/utils/environment";
 
 // Define the parameters interface
 export interface GenerateCaptionsParams {
@@ -33,8 +34,12 @@ export interface GenerateCaptionsResponse {
  */
 export async function generateCaptions(params: GenerateCaptionsParams): Promise<GenerateCaptionsResponse> {
   try {
+    // Get the correct region based on environment
+    const region = 'us-central1';
+    console.log(`Calling Firebase function in region: ${region}`);
+    
     // Initialize Firebase functions
-    const functions = getFunctions(undefined, 'us-central1');
+    const functions = getFunctions(undefined, region);
     
     // Create the callable function
     const generateCaptionsFunction = httpsCallable<GenerateCaptionsParams, GenerateCaptionsResponse>(
@@ -42,8 +47,12 @@ export async function generateCaptions(params: GenerateCaptionsParams): Promise<
       'generateCaptions'
     );
     
+    console.log("Calling generateCaptions with params:", params);
+    
     // Call the function
     const result = await generateCaptionsFunction(params);
+    
+    console.log("Function call successful, received data:", result.data);
     
     // Return the data
     return result.data;
