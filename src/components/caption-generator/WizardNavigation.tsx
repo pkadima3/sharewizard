@@ -7,7 +7,6 @@ import NicheSelector from '@/components/NicheSelector';
 import PlatformSelector from '@/components/PlatformSelector';
 import GoalSelector from '@/components/GoalSelector';
 import ToneSelector from '@/components/ToneSelector';
-import PostIdeaInput from '@/components/PostIdeaInput';
 import GeneratedCaptions from '@/components/GeneratedCaptions';
 import { toast } from "sonner";
 
@@ -39,8 +38,7 @@ const WizardNavigation: React.FC<WizardNavigationProps> = ({
     selectedPlatform,
     selectedGoal,
     selectedTone,
-    captionOverlayMode,
-    postIdea
+    captionOverlayMode
   } = state;
   
   const handleMediaSelect = (file: File | null) => {
@@ -86,10 +84,6 @@ const WizardNavigation: React.FC<WizardNavigationProps> = ({
     setState({ selectedGoal: goal });
   };
 
-  const handlePostIdeaChange = (idea: string) => {
-    setState({ postIdea: idea });
-  };
-
   const handleToneChange = (tone: string) => {
     setState({ selectedTone: tone });
   };
@@ -111,7 +105,7 @@ const WizardNavigation: React.FC<WizardNavigationProps> = ({
       onPrev={onPrev} 
       isNextDisabled={isNextButtonDisabled(currentStep, state)} 
       isGenerating={isGenerating} 
-      hideNextButton={currentStep === 5 || currentStep === 6}
+      hideNextButton={currentStep === 4 || currentStep === 5}
     >
       {currentStep === 0 && 
         <MediaUploader 
@@ -142,15 +136,8 @@ const WizardNavigation: React.FC<WizardNavigationProps> = ({
           onGoalChange={handleGoalChange} 
         />
       }
-
-      {currentStep === 4 && 
-        <PostIdeaInput 
-          postIdea={postIdea} 
-          onPostIdeaChange={handlePostIdeaChange} 
-        />
-      }
       
-      {currentStep === 5 && 
+      {currentStep === 4 && 
         <ToneSelector 
           selectedTone={selectedTone} 
           onToneChange={handleToneChange} 
@@ -159,7 +146,7 @@ const WizardNavigation: React.FC<WizardNavigationProps> = ({
         />
       }
       
-      {currentStep === 6 && 
+      {currentStep === 5 && 
         <GeneratedCaptions 
           selectedMedia={selectedMedia} 
           previewUrl={previewUrl} 
@@ -167,7 +154,6 @@ const WizardNavigation: React.FC<WizardNavigationProps> = ({
           selectedPlatform={selectedPlatform} 
           selectedGoal={selectedGoal} 
           selectedTone={selectedTone} 
-          postIdea={postIdea} 
           isGenerating={isGenerating} 
           setIsGenerating={setIsGenerating} 
           isTextOnly={isTextOnly} 

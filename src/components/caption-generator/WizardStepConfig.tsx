@@ -10,7 +10,6 @@ export interface CaptionGeneratorState {
   selectedGoal: string;
   selectedTone: string;
   captionOverlayMode: 'overlay' | 'below';
-  postIdea: string; // Added post idea field
 }
 
 export const getWizardSteps = (state: CaptionGeneratorState): WizardStep[] => {
@@ -20,8 +19,7 @@ export const getWizardSteps = (state: CaptionGeneratorState): WizardStep[] => {
     selectedNiche,
     selectedPlatform,
     selectedGoal,
-    selectedTone,
-    postIdea
+    selectedTone
   } = state;
   
   return [{
@@ -41,10 +39,6 @@ export const getWizardSteps = (state: CaptionGeneratorState): WizardStep[] => {
     description: "Define your content goal",
     isCompleted: !!selectedGoal
   }, {
-    title: "Post Idea",
-    description: "Describe what your post is about",
-    isCompleted: !!postIdea
-  }, {
     title: "Tone",
     description: "Choose the tone for your caption",
     isCompleted: !!selectedTone
@@ -62,16 +56,14 @@ export const isNextButtonDisabled = (currentStep: number, state: CaptionGenerato
     selectedNiche,
     selectedPlatform, 
     selectedGoal,
-    selectedTone,
-    postIdea
+    selectedTone
   } = state;
   
   return (
     currentStep === 0 && !selectedMedia && !isTextOnly || 
     currentStep === 1 && !selectedNiche || 
     currentStep === 2 && !selectedPlatform || 
-    currentStep === 3 && !selectedGoal ||
-    currentStep === 4 && !postIdea ||
-    currentStep === 5 && !selectedTone
+    currentStep === 3 && !selectedGoal || 
+    currentStep === 4 && !selectedTone
   );
 };

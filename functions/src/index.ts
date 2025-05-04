@@ -1,3 +1,4 @@
+
 import { onRequest } from "firebase-functions/v2/https";
 import { getOpenAIKey } from "./config/secrets";
 import { generateCaptions } from "./services/openai";

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { GeneratedCaption } from '@/types/captionTypes';
+import { GeneratedCaption } from '@/services/openaiService';
 import { MediaType } from '@/types/mediaTypes';
 import SocialSharing from './SocialSharing';
 import { sharePreview, downloadPreview } from '@/utils/sharingUtils';

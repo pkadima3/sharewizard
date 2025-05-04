@@ -4,7 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Edit, Share, Download } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-import { GeneratedCaption } from '@/types/captionTypes';
+import { GeneratedCaption } from '@/services/openaiService';
 import { MediaType, CaptionStyle } from '@/types/mediaTypes';
 
 interface MediaPreviewProps {

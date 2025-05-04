@@ -2,7 +2,7 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Copy } from 'lucide-react';
-import { GeneratedCaption } from '@/types/captionTypes';
+import { GeneratedCaption } from '@/services/openaiService';
 import { toast } from "sonner";
 
 interface CaptionsListProps {

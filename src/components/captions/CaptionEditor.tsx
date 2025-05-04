@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { GeneratedCaption } from '@/types/captionTypes';
+import { GeneratedCaption } from '@/services/openaiService';
 import CaptionEditForm from './CaptionEditForm';
 import MediaPreview from './MediaPreview';
 

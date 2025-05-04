@@ -1,13 +1,8 @@
+
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
-import axios from 'axios';
+import OpenAI from "openai";
 import { getOpenAIKey } from "../config/secrets";
-
-// Initialize Firebase Admin SDK if not already initialized
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
 
 // Type for OpenAI error response
 interface OpenAIErrorResponse {
@@ -23,35 +18,36 @@ export interface GeneratedCaption {
   title: string;
   caption: string;
   cta: string;
-  tags: string;
-}
-
-export interface GenerateCaptionsResponse {
-  captions: GeneratedCaption[];
-  requests_remaining: number;
+  hashtags: string[];
 }
 
 export const generateCaptions = onCall({
   // Set comprehensive CORS configuration with proper validation
   cors: [
-    // Allow all origins - this is the key fix
-    '*',
+    // Lovable preview domains
+    'https://preview--sharewizard.lovable.app/caption-generator',
+    'https://lovable.dev/projects/94ab2c59-8218-46db-b65e-b3ea4e02a86c',
     
-    // Also keep specific entries for clarity
-    'https://preview--sharewizard.lovable.app',
-    'https://lovable.dev',
+    // Local development
     'http://localhost:5173',
     'http://localhost:5174',
-    'https://engageperfect.com',
-    'https://www.engageperfect.com',
-    'https://engperfecthlc.web.app',
-    'https://engperfecthlc.firebaseapp.com',
     
-    // Pattern matching
+    // Production domains - explicitly listed
+    'engageperfect.com',
+    'www.engageperfect.com',
+    
+    // Firebase hosting domains
+    /engperfecthlc\.web\.app$/,
+    /engperfecthlc\.firebaseapp\.com$/,
+    
+    // Lovable preview domains - with broad pattern matching
     /.*\.lovable\.app$/,
     /preview.*\.lovable\.app$/,
     /.*\.lovableproject\.com$/,
-    /.*\.lovable\.dev$/
+    /.*\.lovable\.dev$/,
+    
+    // Additional fallback for other origins during development
+    '*'
   ],
   maxInstances: 10,
   timeoutSeconds: 60,
@@ -63,233 +59,121 @@ export const generateCaptions = onCall({
   console.log(`Request origin: ${origin}`);
   
   try {
-    // Verify Firebase Auth
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated", 
-        "You must be logged in to generate captions."
+    const { tone, platform, niche, goal, postIdea } = request.data;
+
+    if (!tone || !platform || !niche || !goal) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'Missing required parameters: tone, platform, niche, goal'
       );
     }
+
+    // Get the API key and initialize OpenAI
+    const apiKey = await getOpenAIKey();
+    const openai = new OpenAI({ apiKey });
+
+    console.log('Calling OpenAI API with model: gpt-4o');
     
-    const uid = request.auth.uid;
-    const data = request.data as {
-      tone: string;
-      platform: string;
-      postIdea: string;
-      niche: string;
-      goal: string;
-    };
+    // Create the prompt for OpenAI
+    const systemPrompt = `You are the world's best content creator and digital marketing expert. Create 3 engaging ${tone} captions for ${platform} tailored for the ${niche} niche with a goal of ${goal}.`;
     
-    // Input validation
-    if (!data.tone || !data.platform || !data.postIdea || !data.niche || !data.goal) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Missing required fields. Please provide tone, platform, postIdea, niche, and goal."
-      );
+    const userPrompt = `
+      Create 3 engaging ${tone} captions for ${platform} about '${postIdea || niche}'.
+
+      The caption must:
+      1. Be concise and tailored to ${platform}'s audience and character limits (e.g., Instagram: 2200 characters, Twitter: 200 characters).
+      2. Use 5 hashtags relevant to the ${niche} industry.
+      3. Include a call-to-action to drive engagement for the goal: "${goal}"
+      4. If the goal is to share knowledge, start with words like 'did you know?', "Insight", "Fact", etc.
+
+      Format as JSON with these fields for each caption:
+      - title: A brief, catchy title highlighting main caption theme
+      - caption: The main caption text (NO hashtags here)
+      - cta: Call-to-action
+      - hashtags: Array of 5 relevant hashtags (without # symbol)
+    `;
+    
+    // Make the API call with timeout protection
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("OpenAI API request timed out")), 25000);
+    });
+    
+    const completionPromise = openai.chat.completions.create({
+      model: "gpt-4o",  // Using gpt-4o for better results
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+      response_format: { type: "json_object" }
+    });
+    
+    // Race between API call and timeout
+    const completion = await Promise.race([
+      completionPromise,
+      timeoutPromise
+    ]) as any;
+
+    console.log('OpenAI API response received');
+    
+    // Parse the response
+    const content = completion.choices[0].message.content;
+    if (!content) {
+      throw new functions.https.HttpsError('internal', 'Empty response from OpenAI');
     }
     
-    // Fetch user profile
-    const userDoc = await admin.firestore().collection("users").doc(uid).get();
-    
-    if (!userDoc.exists) {
-      throw new HttpsError(
-        "not-found", 
-        "User profile not found."
-      );
-    }
-    
-    const userData = userDoc.data() as {
-      requests_used: number;
-      requests_limit: number;
-      plan_type: string;
-      flexy_requests?: number;
-    };
-    
-    // Check usage limits
-    if (
-      userData.requests_used >= userData.requests_limit && 
-      (!userData.flexy_requests || userData.flexy_requests <= 0)
-    ) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "You've reached your plan limit. Please upgrade or buy a Flex pack."
-      );
-    }
-    
-    // Get OpenAI API key
-    const openAiApiKey = await getOpenAIKey();
-    
-    // Prepare OpenAI request
-    const prompt = `You are the world's best content creator and digital, Social Media marketing and sales expert. 
-    Create exactly 3 highly engaging ${data.tone} captions for ${data.platform} about '${data.postIdea}' in the ${data.niche} industry.
-    
-    The captions MUST follow this exact format with these exact headings:
-    
-    Caption 1:
-    [Title] A catchy title that highlights the post's theme.
-    [Caption] Write a 1-3 sentence caption in a ${data.tone} tone without hashtags.
-    [Call to Action] Provide a specific call-to-action to encourage engagement.
-    [#Tags] Include 3-5 relevant hashtags for the ${data.niche} industry.
-    
-    Caption 2:
-    [Title] Another engaging title for a unique post idea.
-    [Caption] Write an attention-grabbing caption.
-    [Call to Action] Include a CTA to drive user interaction.
-    [#Tags] Include creative relevant hashtags.
-    
-    Caption 3:
-    [Title] Third compelling title idea
-    [Caption] Provide a brief but engaging caption with appropriate.
-    [Call to Action] Suggest a CTA to encourage likes, shares, or comments
-    [#Tags] Include a third set of appropriate hashtags.
-    
-    Important requirements:
-    1. Be concise and tailored to ${data.platform}'s audience and character limits.
-    2. Reflect current trends or platform-specific language.
-    3. If the goal is to share knowledge, start with words like 'did you know?', 'Insight:', 'Fact:', etc.
-    4. Focus on the goal: ${data.goal}
-    5. ALWAYS use the EXACT format with [Title], [Caption], [Call to Action], and [#Tags] sections for each caption.
-    6. Do not include any explanations, just the 3 formatted captions.`;
-    
-    // Call OpenAI API
     try {
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: "You are a professional social media caption generator that returns structured output."
-            },
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 800
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${openAiApiKey}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const parsedContent = JSON.parse(content);
       
-      const responseText = response.data.choices[0].message.content;
-      
-      // Parse captions
-      const captions = parseCaptions(responseText);
-      
-      // Update user's request count
-      const userRef = admin.firestore().collection("users").doc(uid);
-      
-      // Check if using flexy requests
-      let requests_remaining: number;
-      
-      if (userData.plan_type === "flexy" && userData.flexy_requests && userData.flexy_requests > 0) {
-        // Decrement flexy requests
-        await userRef.update({
-          flexy_requests: admin.firestore.FieldValue.increment(-1)
-        });
-        
-        const updatedDoc = await userRef.get();
-        const updatedData = updatedDoc.data() as { 
-          flexy_requests: number; 
-          requests_limit: number; 
-          requests_used: number 
-        };
-        
-        requests_remaining = (updatedData.flexy_requests || 0) + 
-          (updatedData.requests_limit - updatedData.requests_used);
-      } else {
-        // Increment used requests
-        await userRef.update({
-          requests_used: admin.firestore.FieldValue.increment(1)
-        });
-        
-        const updatedDoc = await userRef.get();
-        const updatedData = updatedDoc.data() as { 
-          requests_limit: number; 
-          requests_used: number; 
-          flexy_requests?: number 
-        };
-        
-        requests_remaining = (updatedData.requests_limit - updatedData.requests_used) + 
-          (updatedData.flexy_requests || 0);
+      // Check if the response has the expected format
+      if (!parsedContent.captions || !Array.isArray(parsedContent.captions)) {
+        throw new functions.https.HttpsError('internal', 'Invalid response format from OpenAI');
       }
       
-      // Log generation
-      await admin.firestore().collection("users").doc(uid).collection("generations").add({
-        input: {
-          tone: data.tone,
-          platform: data.platform,
-          niche: data.niche,
-          goal: data.goal,
-          postIdea: data.postIdea
-        },
-        output: captions,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      // Return response
+      // Return the captions along with a mock count of remaining requests
       return {
-        captions,
-        requests_remaining
+        captions: parsedContent.captions,
+        requests_remaining: 100  // Replace with actual limit from your user management system
       };
       
-    } catch (error: any) {
-      console.error("OpenAI API Error:", error);
-      throw new HttpsError(
-        "internal",
-        "Failed to generate captions from AI. Please try again."
-      );
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      console.error("Raw content that failed to parse:", content);
+      throw new functions.https.HttpsError('internal', 'Failed to parse response from OpenAI');
     }
-  } catch (error: any) {
-    console.error("Function error:", error);
-    
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-    
-    throw new HttpsError(
-      "internal",
-      error.message || "An unexpected error occurred"
-    );
-  }
-});
 
-// Helper function to parse captions from OpenAI response
-function parseCaptions(text: string): GeneratedCaption[] {
-  console.log("Raw response from OpenAI:", text);
-  
-  const captions: GeneratedCaption[] = [];
-  
-  // Split the text by "Caption X:" pattern
-  const captionBlocks = text.split(/Caption \d+:/);
-  
-  // Skip the first block if it's empty or contains only intro text
-  const blocksToProcess = captionBlocks.slice(1);
-  
-  for (const block of blocksToProcess) {
-    if (block.trim()) {
-      // Extract the different parts
-      const titleMatch = block.match(/\[Title\](.*?)(?=\[Caption\]|\[Call to Action\]|\[#Tags\]|$)/s);
-      const captionMatch = block.match(/\[Caption\](.*?)(?=\[Call to Action\]|\[#Tags\]|$)/s);
-      const ctaMatch = block.match(/\[Call to Action\](.*?)(?=\[#Tags\]|$)/s);
-      const tagsMatch = block.match(/\[#Tags\](.*?)(?=$)/s);
-      
-      captions.push({
-        title: titleMatch ? titleMatch[1].trim() : "Generated Title",
-        caption: captionMatch ? captionMatch[1].trim() : "Check out this amazing content!",
-        cta: ctaMatch ? ctaMatch[1].trim() : "Like and share!",
-        tags: tagsMatch ? tagsMatch[1].trim() : "#content #social"
+  } catch (error: unknown) {
+    console.error('Error generating captions:', error);
+    
+    // Type guard for OpenAI error response
+    const openAIError = error as OpenAIErrorResponse;
+    
+    if (openAIError.response) {
+      console.error('OpenAI API Error Response:', {
+        status: openAIError.response.status,
+        data: openAIError.response.data
       });
     }
+    
+    // Map OpenAI errors to appropriate Firebase errors
+    if (openAIError.status === 401 || (openAIError.response?.status === 401)) {
+      throw new functions.https.HttpsError(
+        'permission-denied',
+        'Invalid OpenAI API key.'
+      );
+    } else if (openAIError.status === 429 || (openAIError.response?.status === 429)) {
+      throw new functions.https.HttpsError(
+        'resource-exhausted',
+        'OpenAI rate limit exceeded. Please try again later.'
+      );
+    }
+    
+    // Default error handling with proper type checking
+    if (openAIError.message) {
+      throw new functions.https.HttpsError('internal', openAIError.message);
+    } else {
+      throw new functions.https.HttpsError('internal', 'An unknown error occurred');
+    }
   }
-  
-  // Ensure we return exactly 3 captions (or fewer if parsing failed)
-  return captions.slice(0, 3);
-}
+});
